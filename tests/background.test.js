@@ -1,0 +1,16 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+const data={local:{},session:{keys:{gemini:'secret-g',deepgram:'secret-d'}}};let listener;const access=[];const sent=[];
+const area=name=>({async setAccessLevel(v){access.push([name,v.accessLevel]);},async get(key){return {[key]:data[name][key]};},async set(v){Object.assign(data[name],v);},async remove(key){delete data[name][key];}});
+globalThis.chrome={storage:{local:area('local'),session:area('session')},runtime:{id:'test',getURL:path=>`chrome-extension://test/${path}`,onMessage:{addListener(fn){listener=fn;}},async sendMessage(m){sent.push(m);return {ok:true};},async openOptionsPage(){}},tabs:{async sendMessage(tabId,m){sent.push({tabId,...m});},async query(){return [];},onRemoved:{addListener(){}},onUpdated:{addListener(){}}},action:{async setBadgeText(){},async setBadgeBackgroundColor(){}}};
+await import('../extension/background.js');
+const content={id:'test',url:'https://www.youtube.com/live_chat?v=demo',tab:{id:42},frameId:2};
+const options={id:'test',url:'chrome-extension://test/options.html'};
+const audio={id:'test',url:'chrome-extension://test/offscreen.html'};
+const message=(m,s=content)=>new Promise(resolve=>listener(m,s,resolve));
+test('storage is restricted to trusted extension contexts',()=>{assert.deepEqual(access,[['local','TRUSTED_CONTEXTS'],['session','TRUSTED_CONTEXTS']]);});
+test('content scripts cannot read keys or mutate private settings',async()=>{for(const type of ['PRIVATE_CONFIG','CLEAR_KEYS','SAVE_SETTINGS','START_CAPTURE']){const r=await message({type});assert.equal(r.ok,false);assert.ok(!JSON.stringify(r).includes('secret-g'));}assert.equal(data.session.keys.gemini,'secret-g');});
+test('public config contains no credentials',async()=>{const r=await message({type:'CONFIG'});assert.equal(r.ok,true);assert.ok(!JSON.stringify(r).includes('secret'));assert.equal(r.keys,undefined);});
+test('unrelated page is rejected',async()=>{assert.equal((await message({type:'CONFIG'},{...content,url:'https://example.com/'})).ok,false);});
+test('trusted options can retrieve session keys',async()=>{const r=await message({type:'PRIVATE_CONFIG'},options);assert.equal(r.keys.gemini,'secret-g');});
+test('late audio events after Stop cannot revive session or publish captions',async()=>{data.session.capture={id:'old',tabId:42};await message({type:'STOP_CAPTURE'},options);const count=sent.length;await message({type:'AUDIO_STATUS',id:'old',status:'LISTENING'},audio);await message({type:'AUDIO_CUE',id:'old',cue:{original:'late'}},audio);assert.equal(data.session.capture,undefined);assert.equal(sent.length,count);});
+test('key deletion clears session credentials',async()=>{await message({type:'CLEAR_KEYS'},options);assert.equal(data.session.keys,undefined);});

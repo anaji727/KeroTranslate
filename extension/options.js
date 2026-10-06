@@ -1,0 +1,13 @@
+const fields=['sttProvider','translationProvider','model','source','speechLanguage','captionTarget','captionMode','captionLines','captionPosition'];
+const q=id=>document.getElementById(id);
+const result=await chrome.runtime.sendMessage({type:'PRIVATE_CONFIG'});
+if(result.ok){for(const f of fields)q(f).value=result.settings[f];q('gemini').value=result.keys.gemini||'';q('deepgram').value=result.keys.deepgram||'';}
+const positions=document.createElement('div');positions.className='positions';q('captionPosition').after(positions);q('captionPosition').hidden=true;
+const labels=['Top left','Top center','Top right','Middle left','Middle center','Middle right','Bottom left','Bottom center','Bottom right'];
+[...q('captionPosition').options].forEach((o,i)=>{const b=document.createElement('button');b.type='button';b.textContent=['↖','↑','↗','←','·','→','↙','↓','↘'][i];b.setAttribute('aria-label',labels[i]);b.setAttribute('aria-pressed',String(q('captionPosition').value===o.value));b.onclick=()=>{q('captionPosition').value=o.value;for(const item of positions.children)item.setAttribute('aria-pressed',String(item===b));};positions.append(b);});
+q('settings').onsubmit=async e=>{
+  e.preventDefault();const settings=Object.fromEntries(fields.map(f=>[f,q(f).value]));
+  const r=await chrome.runtime.sendMessage({type:'SAVE_SETTINGS',settings,keys:{gemini:q('gemini').value.trim(),deepgram:q('deepgram').value.trim()}});
+  q('message').textContent=r.ok?'Saved. Start captions from the extension toolbar on a live watch page.':r.error;
+};
+q('clear').onclick=async()=>{const r=await chrome.runtime.sendMessage({type:'CLEAR_KEYS'});if(r.ok){q('gemini').value='';q('deepgram').value='';q('message').textContent='Both keys deleted. Capture and pending requests stopped.';}else q('message').textContent=r.error;};
