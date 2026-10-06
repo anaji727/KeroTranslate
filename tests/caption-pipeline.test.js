@@ -7,7 +7,9 @@ test('ongoing speech does not cancel translations; waiting work is bounded and S
   const send=m=>listener({target:'offscreen',...m},{id:'test'},()=>{});
   const flush=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
   send({type:'START',id:'session',settings:{sttProvider:'demo',captionMode:'both',captionTarget:'en'}});await flush();
-  emit({id:'1',text:'one',final:true});emit({id:'2',text:'two interim',final:false});emit({id:'2',text:'two',final:true});emit({id:'3',text:'three',final:true});
+  emit({id:'1',text:'on',final:false});assert.equal(requests.length,0);assert.equal(sent.at(-1).cue.phase,'partial');assert.equal(sent.at(-1).cue.sequence,1);
+  emit({id:'1',text:'one',final:true});assert.equal(sent.at(-1).cue.phase,'final');assert.equal(sent.at(-1).cue.sequence,1);
+  emit({id:'2',text:'two interim',final:false});emit({id:'2',text:'two',final:true});emit({id:'3',text:'three',final:true});
   assert.equal(requests.length,1);assert.equal(requests[0].request.signal.aborted,false);
   requests[0].resolve('translated one');await flush();assert.ok(sent.some(m=>m.cue?.translation==='translated one'));
   assert.equal(requests.length,2);assert.equal(requests[1].request.text,'three');
