@@ -1,4 +1,4 @@
-# KeroTranslate — Chrome Extension PoC 0.1
+# 🐸KeroTranslate — Chrome Extension PoC 0.1
 
 2026-10-06 / ローカル検証用。正式名称は未決。
 
