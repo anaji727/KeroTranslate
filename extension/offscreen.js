@@ -9,17 +9,19 @@ function stop(){
   s.media?.getTracks().forEach(t=>t.stop());s.context?.close().catch(()=>{});
 }
 function fail(s,error){if(active!==s)return;status(s,'ERROR',error);stop();}
-async function cue(s,{text,final,id}){
+async function cue(s,{text,final,id,sequence:providerSequence}){
   if(active!==s||s.finalIds.has(id))return;
   if(final){s.finalIds.add(id);if(s.finalIds.size>100)s.finalIds.delete(s.finalIds.values().next().value);}
   s.lastSpeech=Date.now();status(s,s.settings.sttProvider==='demo'?'DEMO':'LISTENING');
-  if(s.segmentId!==id){s.segmentId=id;s.sequence=(s.sequence||0)+1;}
-  const sequence=s.sequence;
+  s.segments??=new Map();
+  if(!s.segments.has(id)){s.sequence=Math.max((s.sequence||0)+1,providerSequence||0);s.segments.set(id,providerSequence||s.sequence);if(s.segments.size>200)s.segments.delete(s.segments.keys().next().value);}
+  const sequence=s.segments.get(id);
   notify(s,'AUDIO_CUE',{cue:{id,sequence,phase:final?'final':'partial',original:text,translation:'',pending:s.settings.captionMode!=='original'}});
   if(!final||s.settings.captionMode==='original')return;
   s.metrics.finalSegments++;
   // Finish the current translation; retain only the newest waiting segment to bound live delay.
-  s.queued={id,text,sequence};if(s.translating)return;
+  if(sequence<(s.newestTranslation||0))return;
+  s.newestTranslation=sequence;s.queued={id,text,sequence};if(s.translating)return;
   s.translating=true;
   try{while(active===s&&s.queued){const next=s.queued;s.queued=null;await translateCue(s,next);}}
   finally{s.translating=false;}
@@ -27,7 +29,7 @@ async function cue(s,{text,final,id}){
 async function translateCue(s,{id,text,sequence}){
   const controller=s.controller=new AbortController();const begin=performance.now();s.metrics.requests++;
   try{
-    const out=await translate({text,source:'auto',target:s.settings.captionTarget,signal:controller.signal},s.settings,s.keys,u=>{s.metrics.inputTokens+=(u.promptTokenCount||0);s.metrics.outputTokens+=(u.candidatesTokenCount||0)+(u.thoughtsTokenCount||0);});
+    const out=await translate({text,source:'auto',target:s.settings.captionTarget,signal:controller.signal},s.settings,s.keys,u=>{s.metrics.inputTokens+=(u.promptTokenCount||0);s.metrics.outputTokens+=(u.candidatesTokenCount||0)+(u.thoughtsTokenCount||0);s.metrics.billedCharacters=(s.metrics.billedCharacters||0)+(u.billedCharacters||0);});
     if(active!==s||controller.signal.aborted)return;
     s.metrics.lastTranslationMs=Math.round(performance.now()-begin);
     notify(s,'AUDIO_CUE',{cue:{id,sequence,phase:'translated',original:text,translation:out,pendingNext:!!s.queued}});
@@ -45,11 +47,11 @@ async function begin(s,streamId){
       if(s.context.state!=='running')throw new Error('Audio playback could not resume. Capture stopped.');
       media.getTracks().forEach(t=>t.onended=()=>fail(s,'Tab audio ended. Start again from the KeroTranslate panel.'));
     }
-    s.provider=createSttProvider(s.settings.sttProvider,{key:s.keys.deepgram,language:s.settings.speechLanguage,samples:FIXTURES,onResult:event=>cue(s,event),onBytes:n=>s.metrics.audioBytes+=n,onError:error=>fail(s,error),onOpen:()=>{
+    s.provider=createSttProvider(s.settings.sttProvider,{key:s.keys[s.settings.sttProvider],language:s.settings.speechLanguage,samples:FIXTURES,onResult:event=>cue(s,event),onBytes:n=>s.metrics.audioBytes+=n,onError:error=>fail(s,error),onOpen:()=>{
       status(s,s.settings.sttProvider==='demo'?'DEMO':'LISTENING');s.lastSpeech=s.started=Date.now();
       s.tick=setInterval(()=>{if(active!==s)return;if(s.settings.sttProvider!=='demo')s.metrics.audioSeconds=(Date.now()-s.started)/1000;notify(s,'METRICS',{metrics:s.metrics});if(Date.now()-s.lastSpeech>15000)status(s,'NO_SPEECH');},5000);
     }});
-    s.provider.start(s.media);
+    await s.provider.start(s.media);
   }catch(e){fail(s,e.name==='NotAllowedError'?'Tab audio permission was denied.':e.message||'Audio capture failed.');}
 }
 chrome.runtime.onMessage.addListener((m,sender,reply)=>{

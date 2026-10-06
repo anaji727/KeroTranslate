@@ -25,13 +25,14 @@ async function start(tabId){
   if(!check?.live)throw new Error('A live player was not detected. Reload the live watch page.');
   if(!check.overlayReady)throw new Error(check.error||'Caption overlay is unavailable. Reload this YouTube page.');
   const config=await settings();const keys=(await chrome.storage.session.get('keys')).keys||{};
-  if(config.sttProvider==='deepgram'&&!keys.deepgram)throw new Error('Add your Deepgram key in Settings.');
-  if(config.captionMode!=='original'&&config.translationProvider==='gemini'&&!keys.gemini)throw new Error('Add your Gemini key in Settings.');
+  const names={deepgram:'Deepgram',gemini:'Gemini',openai:'OpenAI',deepl:'DeepL',deepseek:'DeepSeek'};
+  if(config.sttProvider!=='demo'&&!keys[config.sttProvider])throw new Error(`Add your ${names[config.sttProvider]} API key in Settings.`);
+  if(config.captionMode!=='original'&&config.translationProvider!=='demo'&&!keys[config.translationProvider])throw new Error(`Add your ${names[config.translationProvider]} API key in Settings.`);
   await offscreen();
   const id=crypto.randomUUID();
   // Demo never captures real audio.
   let streamId=null;
-  if(config.sttProvider==='deepgram'){
+  if(config.sttProvider!=='demo'){
     try{streamId=await chrome.tabCapture.getMediaStreamId({targetTabId:tabId});}
     catch{throw new Error('Open the KeroTranslate toolbar icon once on this YouTube tab, then press Start captions here again. If capture is already active elsewhere, stop it first.');}
   }
@@ -83,7 +84,7 @@ async function handle(m,sender){
     const config=sanitizeSettings(m.settings);await serial(stop);
     for(const c of pending.values())c.abort();pending.clear();
     await chrome.storage.local.set({settings:config});
-    if(m.keys)await chrome.storage.session.set({keys:{gemini:String(m.keys.gemini||'').slice(0,500),deepgram:String(m.keys.deepgram||'').slice(0,500)}});
+    if(m.keys)await chrome.storage.session.set({keys:Object.fromEntries(['gemini','deepgram','openai','deepl','deepseek'].map(name=>[name,String(m.keys[name]||'').trim().slice(0,500)]))});
     for(const tab of await chrome.tabs.query({url:'https://www.youtube.com/*'}))await broadcast(tab.id,{type:'CONFIG_CHANGED',settings:config});return {};
   }
   if(m.type==='CLEAR_KEYS'){await serial(stop);for(const c of pending.values())c.abort();pending.clear();await chrome.storage.session.remove('keys');return {};}

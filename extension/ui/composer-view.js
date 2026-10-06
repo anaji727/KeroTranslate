@@ -36,7 +36,7 @@ export function mountComposer(host,{translate,insert,settings,openSettings=()=>{
     q('.retry').classList.toggle('hidden',s.phase!=='ERROR');
     pending=null;q('.conflict').classList.add('hidden');
   }});
-  const refresh=config=>{settings=config;q('select').value=config.source;q('.provider').textContent=config.translationProvider==='demo'?'Demo · no API':'Gemini';q('.sample').classList.toggle('hidden',config.translationProvider!=='demo');state.configure(config);};
+  const refresh=config=>{settings=config;q('select').value=config.source;q('.provider').textContent=({demo:'Demo · no API',gemini:'Gemini',openai:'OpenAI',deepl:'DeepL',deepseek:'DeepSeek'})[config.translationProvider]||'Unknown';q('.sample').classList.toggle('hidden',config.translationProvider!=='demo');state.configure(config);};
   refresh(settings);
   q('#original').addEventListener('compositionstart',()=>state.compositionStart());
   q('#original').addEventListener('compositionend',e=>state.compositionEnd(e.target.value));

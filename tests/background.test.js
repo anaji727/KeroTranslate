@@ -33,3 +33,21 @@ test('panel start ignores a supplied tab ID and targets its own live watch tab',
   chrome.tabs.get=async id=>{selected=id;return {url:'https://www.youtube.com/watch?v=test'};};chrome.tabs.sendMessage=async()=>({live:true,overlayReady:false});
   try{assert.equal((await message({type:'PANEL_START',tabId:99})).ok,false);assert.equal(selected,42);}finally{chrome.tabs.get=get;chrome.tabs.sendMessage=send;}
 });
+test('all provider keys remain private after saving and all are deleted together',async()=>{
+  const keys={gemini:'g',deepgram:'d',openai:'private-openai',deepl:'private-deepl',deepseek:'private-deepseek',unknown:'drop'};
+  assert.equal((await message({type:'SAVE_SETTINGS',settings:{translationProvider:'deepseek',sttProvider:'openai'},keys},options)).ok,true);
+  assert.equal(data.session.keys.openai,keys.openai);assert.equal(data.session.keys.unknown,undefined);
+  const config=await message({type:'CONFIG'});assert.equal(config.settings.sttProvider,'openai');assert.equal(config.settings.translationProvider,'deepseek');assert.ok(!JSON.stringify(config).includes('private-'));
+  await message({type:'CLEAR_KEYS'},options);assert.equal(data.session.keys,undefined);
+});
+test('new real STT providers require their own key and capture the selected tab',async()=>{
+  const send=chrome.tabs.sendMessage;let captures=0;
+  chrome.tabs.get=async()=>({url:'https://www.youtube.com/watch?v=test'});chrome.tabs.sendMessage=async()=>({live:true,overlayReady:true});
+  chrome.runtime.getContexts=async()=>[{}];chrome.tabCapture={async getMediaStreamId({targetTabId}){assert.equal(targetTabId,42);captures++;return 'stream';}};
+  try{for(const provider of ['openai','deepl']){
+    data.local.settings={sttProvider:provider,captionMode:'original'};data.session.keys={};
+    assert.match((await message({type:'START_CAPTURE',tabId:42},options)).error,/key/);
+    data.session.keys={[provider]:'fake'};assert.equal((await message({type:'START_CAPTURE',tabId:42},options)).ok,true);
+    assert.equal(sent.findLast(m=>m.target==='offscreen'&&m.type==='START').streamId,'stream');await message({type:'STOP_CAPTURE'},options);
+  }assert.equal(captures,2);}finally{chrome.tabs.sendMessage=send;data.local.settings={};}
+});

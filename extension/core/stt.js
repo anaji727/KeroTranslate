@@ -1,3 +1,4 @@
+import {OpenaiStt,DeeplStt} from './stt-extra.js';
 // STT boundary: start(MediaStream), stop(); callbacks never contain keys.
 export class DeepgramStt {
   constructor({key,language,onResult,onOpen,onError,onBytes=()=>{},Socket=WebSocket,Recorder=MediaRecorder}){Object.assign(this,{key,language,onResult,onOpen,onError,onBytes,Socket,Recorder,stopped:false});}
@@ -29,4 +30,4 @@ export class DemoStt {
   start(){this.onOpen();const next=()=>this.onResult({id:String(this.index),text:this.samples[this.index++%this.samples.length][0],final:true});next();this.timer=setInterval(next,5500);}
   stop(){clearInterval(this.timer);}
 }
-export function createSttProvider(provider,options){if(provider==='demo')return new DemoStt(options);if(provider==='deepgram')return new DeepgramStt(options);throw new Error('Unsupported STT provider.');}
+export function createSttProvider(provider,options){if(provider==='demo')return new DemoStt(options);if(provider==='deepgram')return new DeepgramStt(options);if(provider==='openai')return new OpenaiStt(options);if(provider==='deepl')return new DeeplStt(options);throw new Error('Unsupported STT provider.');}

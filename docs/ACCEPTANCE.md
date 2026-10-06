@@ -4,11 +4,11 @@
 
 ## 実施済み
 
-Nodeによる58件のテストが成功。構文とmanifestエントリーファイルの存在を確認。単体HTMLにまとめたJavaScriptも構文検査済み。
+Nodeによる76件のテストが成功。構文とmanifestエントリーファイルの存在を確認。単体HTMLにまとめたJavaScriptも構文検査済み。
 
 追加でローカルHTTPサーバーを起動し、Windowsでルートパス末尾の区切りが重複して正常ファイルまで403になる判定を修正。HTML、CSS、全依存JavaScriptのHTTP 200とContent-Type、存在しないファイルの404、公開ルート外へのアクセスの403を確認した。これはHTTP配信の確認であり、ブラウザー表示・操作の検証とは区別する。
 
-テスト対象は、版更新後の旧応答、遅いre-MTL、IME、方向変更、手動MTL編集、工程別再試行、空入力、dispose、HTTPエラー分類、秘密のURL非混入、鍵の欠落、模擬下書き/Emote保持、曖昧な入力欄の拒否、Socketの停止・遅延応答・backpressure、content scriptからの秘密取得/設定変更の拒否、停止後の音声イベント破棄。
+テスト対象は、版更新後の旧応答、遅いre-MTL、IME、方向変更、手動MTL編集、工程別再試行、空入力、dispose、HTTPエラー分類、長期APIキーのURL非混入（DeepL Voiceの短期接続トークンは公式方式に従いURLに含む）、鍵の欠落、模擬下書き/Emote保持、曖昧な入力欄の拒否、Socketの停止・遅延応答・backpressure、content scriptからの秘密取得/設定変更の拒否、停止後の音声イベント破棄。
 
 ユーザー環境で字幕表示を確認済み。現行YouTube入力欄のcontenteditableが空属性であることを読み取り確認し、検出条件を修正した。partial表示、字幕サイズ・表示時間、INSERT修正、メインパネルの開始停止は実装・オフラインテスト済みで、更新後の実機通し確認は未完了。MockはChrome API/YouTube/Providerそのものを検証しない。開発側から実投稿は行っていない。
 
@@ -17,8 +17,8 @@ Nodeによる58件のテストが成功。構文とmanifestエントリーファ
 1. Chromeへ読み込み、拡張エラーがないこと。設定画面とデモUIが表示されること。
 2. YouTubeの通常ライブ画面でチャットComposerの位置、入力欄、Emoteが使えること。
 3. 投稿せず、空/文字あり/Emoteだけの下書きにOriginal/MTLをINSERTする。候補の投稿は不要。
-4. Geminiキーで短い1文を翻訳し、方向変更・連続入力・MTL編集・IME・再翻訳を確認。
-5. Deepgramキーでまず10秒、次に1分の音声取得を試す。配信音声が途切れないこと。Stop後にChromeの取得表示が消えること。
+4. 各翻訳Providerのキーで短い1文を翻訳し、方向変更・連続入力・MTL編集・IME・再翻訳を確認。
+5. Deepgram / OpenAI / DeepL Voiceでそれぞれまず10秒、次に1分の音声取得を試す。配信音声が途切れないこと。Stop後にChromeの取得表示が消えること。
 6. 取得中の遷移、タブ閉鎖、回線切断、設定変更、キー削除、workerの再起動を確認。
 7. 日英混在の10分評価へ進む。Provider管理画面で請求量を照合。
 
@@ -33,7 +33,7 @@ Nodeによる58件のテストが成功。構文とmanifestエントリーファ
 | A05 | 古い結果が最新を上書きしない | 非同期テスト済み / 実通信でも確認 |
 | A06 | IME途中で翻訳しない | 状態テスト済み / 日本語IMEで確認 |
 | A07 | エラーを分け、原文保持、再試行 | HTTPと状態テスト済み / 実キー不正・429等待ち |
-| A08 | STT/翻訳の独立切替 | Demo＋1実Providerずつの構造 / 2実Provider間比較は未実装 |
+| A08 | STT/翻訳の独立切替 | STTは3実Provider、翻訳は4実Providerを独立選択 / 新Providerの実接続・品質比較は未検証 |
 | A09 | 聴きながら音声字幕 | ユーザーから字幕表示成功の報告 / 音声出力と長時間動作を確認 |
 | A10 | 表示3種、位置9種 | サイズ・時間・partial含め実装 / 全アンカー・1/2行・幅の目視待ち |
 | A11 | 停止・遷移で古い結果が混入しない | worker/Socketのmockテスト済み / 取得中遷移・終了確認待ち |
@@ -49,6 +49,8 @@ Nodeによる58件のテストが成功。構文とmanifestエントリーファ
 ## 計測
 
 Composerは現在、翻訳開始からre-MTL完了までの経過時間をREADYで表示する。650ms debounceは含まない。typing終了からの体感時間は別途記録する。
+
+OpenAI STTのWebRTC送信バイト・STTトークンは集計していません。DeepL翻訳は返却された課金文字数をbilledCharactersに分け、tokensへ換算しません。新Providerの実機手順は[Provider追加ノート](PROVIDERS-0.1.6.md)を参照してください。
 
 Incomingはoffscreen内で音声経過秒、送信バイト、確定segment数、翻訳試行数、翻訳エラー数、返却された入力/出力（thinking含む）tokens、最後の翻訳時間を集計し、5秒ごとにセッション内へ保存する。テキスト本体とキーは指標に含めない。
 
