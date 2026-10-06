@@ -23,6 +23,7 @@ async function start(tabId){
   if(!/^https:\/\/www\.youtube\.com\/watch\?/.test(tab.url||''))throw new Error('Open a YouTube Live watch page first.');
   const check=await chrome.tabs.sendMessage(tabId,{type:'CHECK_LIVE'},{frameId:0}).catch(()=>null);
   if(!check?.live)throw new Error('A live player was not detected. Reload the live watch page.');
+  if(!check.overlayReady)throw new Error(check.error||'Caption overlay is unavailable. Reload this YouTube page.');
   const config=await settings();const keys=(await chrome.storage.session.get('keys')).keys||{};
   if(config.sttProvider==='deepgram'&&!keys.deepgram)throw new Error('Add your Deepgram key in Settings.');
   if(config.captionMode!=='original'&&config.translationProvider==='gemini'&&!keys.gemini)throw new Error('Add your Gemini key in Settings.');
@@ -61,6 +62,11 @@ async function handle(m,sender){
   if(!trusted(sender))throw new Error('Open extension settings for this action.');
   if(m.type==='PRIVATE_CONFIG')return {settings:await settings(),keys:(await chrome.storage.session.get('keys')).keys||{}};
   if(m.type==='STATUS')return {capture:await capture(),settings:await settings(),metrics:(await chrome.storage.session.get('metrics')).metrics||{}};
+  if(m.type==='TEST_OVERLAY'){
+    const result=await chrome.tabs.sendMessage(m.tabId,{type:'TEST_OVERLAY'},{frameId:0}).catch(()=>null);
+    if(!result?.ok)throw new Error(result?.error||'Open a YouTube Live watch page and reload it.');
+    return {overlayReady:true};
+  }
   if(m.type==='SAVE_SETTINGS'){
     const config=sanitizeSettings(m.settings);await serial(stop);
     for(const c of pending.values())c.abort();pending.clear();

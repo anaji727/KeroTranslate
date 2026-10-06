@@ -14,3 +14,10 @@ test('unrelated page is rejected',async()=>{assert.equal((await message({type:'C
 test('trusted options can retrieve session keys',async()=>{const r=await message({type:'PRIVATE_CONFIG'},options);assert.equal(r.keys.gemini,'secret-g');});
 test('late audio events after Stop cannot revive session or publish captions',async()=>{data.session.capture={id:'old',tabId:42};await message({type:'STOP_CAPTURE'},options);const count=sent.length;await message({type:'AUDIO_STATUS',id:'old',status:'LISTENING'},audio);await message({type:'AUDIO_CUE',id:'old',cue:{original:'late'}},audio);assert.equal(data.session.capture,undefined);assert.equal(sent.length,count);});
 test('key deletion clears session credentials',async()=>{await message({type:'CLEAR_KEYS'},options);assert.equal(data.session.keys,undefined);});
+test('capture refuses a live player whose overlay failed initialization',async()=>{
+  const send=chrome.tabs.sendMessage;
+  chrome.tabs.get=async()=>({url:'https://www.youtube.com/watch?v=test'});
+  chrome.tabs.sendMessage=async(_tab,m)=>m.type==='CHECK_LIVE'?{live:true,overlayReady:false}:undefined;
+  try{const r=await message({type:'START_CAPTURE',tabId:42},options);assert.equal(r.ok,false);assert.match(r.error,/overlay/);assert.equal(data.session.capture,undefined);}
+  finally{chrome.tabs.sendMessage=send;}
+});
