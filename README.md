@@ -1,90 +1,133 @@
-# 🐸KeroTranslate — Chrome Extension PoC 0.1
+# 🐸 KeroTranslate
 
-2026-10-06 / ローカル検証用。正式名称は未決。
+YouTube Liveの音声字幕と、自分のコメント翻訳を支援するChrome拡張です。
+配信を見ながら原文・翻訳を読み、自分のコメントは **Original → MTL → re-MTL** で意味を確認できます。
 
-YouTube Liveの音声字幕と、自分のコメントを Original → MTL → re-MTL で確認するChrome拡張です。**INSERTは純正入力欄へ挿入するだけ。投稿は本人がYouTubeで行います。**
+**INSERTはYouTubeの入力欄に下書きを入れるだけ。投稿は自分で行います。**
 
-## まず見る
+現在のバージョン: **0.1.5 / 開発中のPoC**（2026-10-07）。
+リポジトリ・プロダクトの正式表記は **KeroTranslate** です。
 
-[artifacts/KeroTranslate-Preview.html](artifacts/KeroTranslate-Preview.html) をダウンロードし、エクスプローラーからブラウザーで開いてください。単体HTMLなのでインストール不要です。GitHubのファイル閲覧画面ではHTMLは実行されません。
+## ダウンロード
 
-- 仮の配信画面、字幕表示3モード・9マス位置・1/2行を操作できます。
-- Composerの `Try sample` で固定例文を読み込み、翻訳→再翻訳→INSERTを試せます。
-- 下の入力欄は模擬YouTube入力欄です。投稿機能はありません。
-- 既存下書きがあれば `Replace draft / Keep draft` を選びます。
-- 例文以外を入力するとデモ限定の案内を出します。任意文章を翻訳したふりはしません。
-- デモHTMLはAPI、YouTube、外部フォント等に接続しません。
+- [Chrome拡張ZIP](artifacts/KeroTranslate-Extension.zip)
+- [単体HTMLプレビュー](artifacts/KeroTranslate-Preview.html)
+- [リポジトリ](https://github.com/anaji727/KeroTranslate)
 
-## Chromeへ読み込む
+GitHubのファイル閲覧画面ではHTMLは実行されません。ダウンロードしてブラウザーで開いてください。プレビューは固定例文だけを使い、YouTubeや外部APIへ接続しません。
 
-1. Chrome 116以降で拡張機能管理画面を開き、デベロッパーモードを有効にします。
-2. 「パッケージ化されていない拡張機能を読み込む」で、このフォルダーの **`extension`** を選びます。`manifest.json` が直下にあるフォルダーです。
-3. 既に開いているYouTubeページを再読み込みします。
-4. 拡張の `Settings & API keys` からProviderを指定します。初期値は両方Demoです。
-5. 実翻訳はGemini、実音声認識はDeepgramを選択し、それぞれ自分のキーを設定します。キーをチャットへ貼り付ける必要はありません。
-6. YouTube Liveの通常視聴画面を開き、拡張のツールバーポップアップで `Start captions` を押します。実音声は対象タブから取得します。マイクは使いません。
-7. `Stop` で字幕用の音声取得・通信を停止します。Composerは独立して操作できます。
+## Chromeに読み込む
 
-ZIP版は [artifacts/KeroTranslate-Extension.zip](artifacts/KeroTranslate-Extension.zip) にあります。ダウンロード・展開後、その中のmanifestがあるフォルダーを読み込んでください。
+1. ZIPを展開します。ソースから使う場合は `extension` フォルダーを使います。
+2. Chrome 116以降で拡張機能管理画面を開き、デベロッパーモードを有効にします。
+3. 「パッケージ化されていない拡張機能を読み込む」で、`manifest.json` が直下にあるフォルダーを選びます。
+4. 開いているYouTubeページを再読み込みします。
+5. 拡張アイコンの **Settings & API keys** またはメインパネルの歯車から設定を開きます。
+6. 実音声認識には **Deepgram**、実翻訳には **Gemini** を選び、自分のAPIキーを入力して保存します。初期設定は両方Demoです。モデルIDはアカウントで使えるものを設定してください。
+7. YouTube Liveの通常視聴画面でライブチャットを開きます。右側の **KeroTranslateメインパネル** にある **Start captions** で開始、**Stop** で停止します。
 
-## 今回できたもの／まだ検証していないもの
+Chromeのタブ音声取得には、そのタブで拡張を呼び出す操作が必要です。新しいタブや拡張の再読み込み後は、ツールバーの拡張アイコンを一度開いてから、メインパネルのStart captionsを押してください。音声は対象タブから取得し、マイクは使いません。
 
-| 項目 | 状態 |
+### 更新するとき
+
+1. Stopで字幕を停止し、読み込み済みフォルダーのファイルを更新します。
+2. Chromeの拡張機能管理画面でKeroTranslateを再読み込みします。
+3. YouTubeページも再読み込みします。
+4. 設定でAPIキーを再入力・保存し、メインパネルから再開します。
+
+**APIキーはセッション保存のため、拡張の再読み込みやChrome終了で消えます。** 設定保存も実行中の音声取得を停止します。読み込み元フォルダーの場所を変更した場合は、新しいフォルダーをChromeで読み込み直してください。
+
+## 配信字幕
+
+- **partial（認識中）**: 受信した原文を薄色＋「…」で先に表示。同じ区間の修正はその場で更新します。
+- **final（確定）**: 原文を通常色に切り替え、その後に翻訳を開始します。partialごとに翻訳APIは呼びません。
+- 前の翻訳と対応する原文を残し、新しい認識テキストは区切り線の下に表示します。遅れて届いた翻訳が新しいpartialを消さないようにしています。
+- 翻訳待ちの間は表示を維持し、翻訳到着後から表示時間を数えます。新しい翻訳が来たら置き換えます。
+- 翻訳が追いつかない場合、進行中の1件を完了させ、待機中は最新1区間だけを残します。途中の区間は省略されるため、全文記録用途ではありません。
+
+**Settings → 03 / Captions** で調整できます。
+
+| 設定 | 選択肢 / 初期値 |
 |---|---|
-| 独立したComposer状態管理、IME待機、STALE、旧応答破棄、MTL編集、再試行 | 実装・ユニットテスト済み |
-| 下書き置換確認、重複防止、200文字制限、投稿操作なし | Adapter実装・模擬DOMテスト済み |
-| 字幕表示と設定、単体プレビュー | 実装・構文検査済み。画面目視は未実施 |
-| Gemini REST Adapter | 実装・HTTPモックテスト済み。実キーで未検証 |
-| Deepgram streaming Adapter | 実装・Socket/Recorderモックテスト済み。実音声で未検証 |
-| MV3 worker / offscreen / tabCapture | 実装。拡張を実際に読み込む統合テストは未実施 |
-| YouTube現行DOM、Emote、全画面、チャット再読込 | 実機確認待ち |
-| API料金、認識品質、混在言語性能、実遅延 | 実測前 |
+| Show | Original + MTL / Original only / MTL only。初期値は両方 |
+| Caption size | 75 / 100 / 125 / 150 / 200%。初期値100% |
+| Keep captions after translation | 5 / 7 / 10 / 15 / 20秒。初期値10秒 |
+| Maximum lines per language | 1 / 2行。初期値2行。認識中の行にも適用 |
+| Position | 上・中央・下 × 左・中央・右の9か所。初期値は下中央 |
 
-この作業環境ではブラウザー操作ツールがlocalhostへの接続をブロックし、file URLもブラウザーポリシーで許可されませんでした。そのため画面確認・実機確認を成功扱いにしていません。ユーザーのブラウザーへ拡張をインストールしたり、実APIを呼び出したりもしていません。
+partialを見るには **Original + MTL** または **Original only** を選びます。MTL onlyでは原文を表示しません。Original onlyでは字幕用の翻訳APIを呼ばず、finalの表示後から表示時間を数えます。
+
+**Settings → 02 / Languages** のSpeech languageが配信の音声言語、Translate captions intoが字幕の翻訳先です。コメント欄のJA → EN / EN → JAとは独立しています。日本語配信ならSpeech languageをJapaneseに設定できます。Mixed languagesは実験的です。
+
+## コメント作成
+
+1. Originalにコメントを入力し、JA → EN / EN → JAを選びます。
+2. MTL（翻訳）とre-MTL（意味確認用の再翻訳）を確認します。再翻訳は正確さの保証ではありません。
+3. 必要ならMTLを直接編集します。編集した文からre-MTLを更新します。
+4. OriginalまたはMTLの **INSERT** でYouTubeの入力欄へ挿入します。MTLは最新の再翻訳が完了してから挿入できます。
+5. YouTube側で確認し、自分で送信します。
+
+既存の下書きがある場合は **Replace draft / Keep draft** を選びます。挿入は200文字以内（JavaScriptの文字列長基準）です。日本語IME入力中は翻訳を待ち、古い応答が新しい入力を上書きしないようにしています。
+
+## 困ったとき
+
+| 症状 | 確認すること |
+|---|---|
+| パネルが出ない | 通常のYouTube Live視聴画面でライブチャットを開き、YouTubeを再読み込み |
+| 字幕が出ない | 拡張ポップアップの **Test overlay** で固定字幕が出るか確認。音声・APIを使わず表示だけを試せます |
+| LISTENINGなのに字幕がない | 接続中という表示だけでは認識成功は分かりません。配信音声、Speech language、Provider側の利用状況を確認 |
+| 開始時に拡張アイコンを開く案内 | そのYouTubeタブで拡張アイコンを一度開き、メインパネルから再試行 |
+| NO_SPEECH | 15秒以上認識結果が届いていない状態。実際の無音を測定した表示ではありません |
+| INSERTできない | ログイン・チャットの投稿条件と入力欄を確認。最新版でYouTubeを再読み込み。入力欄はYouTubeのDOM変更の影響を受けます |
+| 更新後にAPIキー不足 | 設定でキーを再入力。キーをチャットやIssueに貼る必要はありません |
+| Demoで任意の文章を翻訳できない | Demoは固定例文専用。実翻訳はGeminiを設定 |
 
 ## キーとデータ
 
-- キーは `chrome.storage.session` に保存。Chrome終了・拡張再読み込み等で消えます。永続的な暗号化保管ではありません。
-- キーはcontent scriptへ返さず、YouTubeのDOMやページ向けメッセージにも含めません。設定ページ・worker・offscreen間の信頼された拡張通信では利用します。
-- STTと翻訳のキーは別です。キー削除ボタンは両方を消し、進行中処理を中断します。
-- Deepgram選択時はタブ音声をDeepgramへ送ります。広告等を含むタブ内の音声全体が取得対象です。
-- Gemini選択時は自分の入力、翻訳文、字幕原文をGoogleへ送ります。Kero側の収集サーバー、解析SDK、翻訳履歴保存はありません。
-- Deepgramは `mip_opt_out=true` を付けます。Google等のデータ利用条件はProvider契約・料金枠に依存します。「BYOK＝外部で学習されない」とは説明しません。
-- 自動再試行・有料Providerへの自動切替は行いません。キャンセル前に送ったリクエストの課金は取り消せない場合があります。
+- APIキーは `chrome.storage.session` に保存し、content scriptやYouTubeのDOMへ返しません。永続的な暗号化保管ではありません。
+- Deepgram選択時はタブ内の音声全体をDeepgramへ送信します。Gemini選択時はコメント・翻訳文・字幕原文をGoogleへ送信します。
+- KeroTranslate独自の収集サーバー、解析SDK、翻訳履歴保存はありません。
+- Deepgramには `mip_opt_out=true` を付けています。各Providerのデータ利用条件・無料枠・料金は契約によって異なります。
+- 自動の有料Provider切替は行いません。停止前に送信済みの処理はProvider側で課金される場合があります。
 
-## 開発・再現
+## 検証状況と制約
 
-依存ライブラリ・ビルド・npm installは不要。Node.js 22以降を推奨します。
+ユーザー環境で字幕が表示されることを確認済みです。開発側では58件のオフラインテスト、JavaScript構文、manifest参照先を検証しています。現在のYouTubeチャット入力欄のDOMも読み取り確認済みです。
+
+partial表示・サイズ調整・INSERT修正・パネル内の開始停止を含む最新版の実機通し確認、全画面・シアター・ポップアウト、混在言語の品質・遅延・費用は引き続き確認が必要です。モックテストの成功を、実APIやすべてのブラウザー表示の成功とは扱っていません。
+
+VAD終端調整、後続文マージ、固有名詞補正、区間別レイテンシー表示、全文トランスクリプト、他の実Provider、OBS連携は未実装です。
+
+## 開発
+
+依存ライブラリのインストールやビルドは不要です。Node.js 22以降を推奨します。
 
 ```powershell
-node --test tests/composer.test.js tests/providers.test.js tests/youtube.test.js tests/stt.test.js tests/background.test.js tests/offscreen.test.js
+node --test tests/*.test.js
 node tools/check.js
 node tools/standalone.js
-powershell -NoProfile -File tools/package.ps1
+Compress-Archive -Path extension/* -DestinationPath artifacts/KeroTranslate-Extension.zip -Force
 node tools/serve.js
 ```
 
-最後のコマンドはローカルプレビューサーバーをポート4173で起動します。普段は単体HTMLで十分です。
+最後のコマンドはローカルプレビューを `http://127.0.0.1:4173` で配信します。単体HTMLでも動作します。プレビューのpartial → final → 翻訳は固定タイミングの演出で、実測レイテンシーではありません。
 
-```text
-extension/
-  manifest.json          Chromeへ読み込むエントリー
-  background.js          権限・キー・Composer通信・開始停止
-  offscreen.js           音声取得と再生・STT→翻訳の接続
-  core/composer.js        UIに依存しない版管理
-  core/providers.js       Translation Adapter（Demo / Gemini）
-  core/stt.js             STT Adapter（Demo / Deepgram）
-  youtube.js              YouTube固有DOMへの依存
-  content.js              watch / live_chatへの組み込み
-  ui/                    共通Composerと字幕
-  options.* / popup.*     設定と開始停止
-demo/                    同じUIを利用するプレビュー
-tests/                   42件のオフラインテスト
-docs/DESIGN.md           設計・採用案・比較順・出典
-docs/ACCEPTANCE.md       実機確認手順と受入条件
-docs/reference/          元の引継ぎ仕様書・設計依頼文
-artifacts/               ダウンロード用HTMLプレビューと拡張ZIP
-```
+| 場所 | 内容 |
+|---|---|
+| `extension/` | Chromeへ読み込む拡張本体 |
+| `demo/` | APIを使わないプレビュー |
+| `tests/` | 状態管理、字幕、Provider、YouTube入力、権限境界のテスト |
+| `tools/` | 構文検査・プレビュー生成・ZIP作成・ローカル配信 |
+| `artifacts/` | 配布用ZIPと単体HTML |
+| [設計](docs/DESIGN.md) | 設計判断とProvider比較の記録 |
+| [受入確認](docs/ACCEPTANCE.md) | 実機確認手順・残作業 |
+| `docs/reference/` | 名称を統一した引継ぎ資料の同梱版 |
 
-次は実際にChromeへ読み込み、A02/A03/A09/A11/A13を優先して確認します。PoC全体の合格判定はまだです。
+## 更新履歴
 
+- **0.1.5**: KeroTranslateへ名称統一。README・操作案内を更新。
+- **0.1.4**: partialを薄色で先行表示、finalを通常色表示。遅れた翻訳と新しい認識結果を併存。
+- **0.1.3**: 現行YouTube入力欄に合わせINSERTを修正。開始・停止をメインパネルへ移設。
+- **0.1.2**: 翻訳待ちの表示維持、字幕サイズ・表示時間設定を追加。
+- **0.1.1**: 字幕初期化の再試行とTest overlayを追加。
+- **0.1.0**: 音声字幕・コメント翻訳・再翻訳のPoCを作成。

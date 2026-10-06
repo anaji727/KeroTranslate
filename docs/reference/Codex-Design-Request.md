@@ -1,6 +1,6 @@
 # Codexへ渡す依頼文
 
-添付の `KeroTranslation-Spec.md` を読み、KeroTranslation（過去相談名KeroTranslate）のChrome拡張PoCを設計してください。
+添付の `KeroTranslate-Spec.md` を読み、KeroTranslateのChrome拡張PoCを設計してください。
 
 Chat側で相談していた内容を設計着手用に整理した仕様書です。文書内の「引継ぎ仕様」「相談案」「今回の設計補完案」「未決事項」を区別し、補完案を過去の確定事項として扱わないでください。
 

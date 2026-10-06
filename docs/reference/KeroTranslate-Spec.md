@@ -1,4 +1,6 @@
-# KeroTranslation / KeroTranslate — Codex設計引き継ぎ仕様書
+# KeroTranslate — Codex設計引き継ぎ仕様書
+
+> 同梱資料の名称を2026-10-07の決定に合わせて統一。機能仕様の原案であり、現在の実装状況はREADMEを参照。
 
 作成日: 2026-10-06（JST）  
 版: 0.1 / 過去相談の整理・設計着手用  
@@ -18,7 +20,7 @@
 1. [引継ぎ完了報告](https://chatgpt.com/c/6abfc934-74cc-83e9-a021-f80ecffff268) 冒頭添付「貼り付けたテキスト（1）.txt」。資料表題は「次スレッド用ハンドオーバー / 2026-10-02 深夜時点」。KeroTranslate、PoC、Provider、料金、UI/UX、Overlay、辞書、Streamer Planの各節を参照。
 2. [スレッド移行確認](https://chatgpt.com/c/6aba4a84-b388-83e8-9246-e54e5289033b)（検索結果・本文取得では「20261003」表記もあり）。リリース時の説明、STT/MTL/re-MTL、BYOK、最小構成を維持する方針などの周辺会話を確認。
 
-今回の依頼では「KeroTranslation」、過去資料では「KeroTranslate」が使われている。本書では依頼名を表題に併記し、UI上の仮称は過去相談に沿ってKeroTranslateとする。正式表記は未決。旧案GekoTranslateへ戻さない。
+正式表記はKeroTranslate。リポジトリ、プロダクトUI、同梱資料の名称を統一する。
 
 ## 2. 何を作るか
 
@@ -287,7 +289,7 @@ Hosted登場後もBYOK Paidを残す方針。価格、時間制限、機能差�
 
 | 項目 | 現時点の扱い |
 |---|---|
-| 正式名称 | KeroTranslation / KeroTranslateの表記統一は未決 |
+| 正式名称 | KeroTranslateに統一（2026-10-07） |
 | UIフレームワーク・言語・ビルド | 過去合意なし。Codexが理由付きで提案 |
 | 最初に動かすProvider | 候補から選定。全社比較の範囲も提案 |
 | Incomingの言語判定 | 日英混在を評価し、自動/固定の選択を決める |

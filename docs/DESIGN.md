@@ -1,6 +1,6 @@
-# KeroTranslation 設計と実装計画
+# KeroTranslate 設計と実装計画
 
-2026-10-06 JST / 初版。添付の依頼文・仕様書を参考資料として扱い、今回の「これ組む」に対して設計＋ローカルPoCソースを作成した。資料内の過去合意と今回の採用案は区別する。
+2026-10-06 JST / 初版。2026-10-07に名称・字幕仕様・テスト数を更新。添付の依頼文・仕様書を参考資料として扱い、今回の「これ組む」に対して設計＋ローカルPoCソースを作成した。資料内の過去合意と今回の採用案は区別する。
 
 ## 1. 範囲と今回の判断
 
@@ -10,7 +10,7 @@
 
 | 判断 | 初版で採用した案 | 理由・見直し条件 |
 |---|---|---|
-| UI名 | KeroTranslate | 仕様書の仮称を継承。正式名は未決 |
+| UI名 | KeroTranslate | 2026-10-07に正式表記をKeroTranslateへ統一 |
 | 言語・UI | JavaScript ES Modules / Shadow DOM / CSS | 外部依存・ビルド工程なしでMV3を読み込める。型とSDKが増えた段階でTypeScript化 |
 | 初期翻訳 | Gemini / モデルID編集可能 | RESTの小さなAdapterで構成。品質優位を断定しない |
 | 初期STT | Deepgram Nova-3 | 公式がstreamingと日英を含むmultiを記載。実配信の品質は別評価 |
@@ -19,7 +19,7 @@
 | 既存下書き | 空なら挿入、既存なら置換/維持 | 確認中に純正側が変わった場合も再確認。追記は初版に入れない |
 | 言語 | ComposerはJA→EN/EN→JA。字幕は固定出力言語 | 日英混在STTは実験的。言語ごとに出力先を自動反転しない |
 | キー | セッション保存のみ | 永続保存のリスクと追加UIを初版で避ける |
-| 字幕 | 初期BC、原文＋訳文、各最大2行、7秒保持 | 最新発話だけ。1/2行は各言語の最大行数であり、両方表示は最大2/4行 |
+| 字幕 | 初期BC、原文＋訳文、各最大2行、翻訳後10秒（変更可） | 75〜200%のサイズ設定。新しい認識中テキストは別行に表示 |
 | 対象画面 | 通常視聴を基準 | 全画面・シアター・ポップアウトは検証後に対応表を更新 |
 | ローカル辞書 | 後続 | 初期精度測定で必要な固有名詞を特定してから |
 
@@ -69,7 +69,7 @@ ComposerはrevisionとAbortControllerを持つ。原文・方向・設定変更�
 
 `EMPTY → STALE → TRANSLATING → BACK_TRANSLATING → READY`。MTL編集は`EDITING_MTL → BACK_TRANSLATING`。失敗は`ERROR`で原文保持。IME composition中は送信しない。Original INSERTは非空なら可能、MTLはREADYのみ。2工程の対応が取れない結果は挿入させない。
 
-字幕はcapture session ID＋Deepgram segment start IDで対応付ける。interimは原文だけ、finalで翻訳。新しい発話が出たら前の訳を併記しない。前の翻訳が遅れた場合は表示しない。**初版は全発話の逐次表示を保証しない**。高密度な会話では字幕を飛ばす可能性があり、キュー/確定発話の束ね方を実測で検討する。
+字幕はcapture session ID＋Deepgram segment start IDで対応付ける。interimは原文だけ、finalで翻訳。partialは薄色＋「…」、finalは通常色。前の翻訳と新しい認識結果を併存させる。進行中の翻訳は完了させ、待機中は最新1区間だけを保持する。**初版は全発話の逐次表示を保証しない**。高密度な会話では字幕を飛ばす可能性があり、キュー/確定発話の束ね方を実測で検討する。
 
 停止はcapture IDを無効化してからoffscreenへ通知し、Recorder、WebSocket、MediaStream全track、AudioContext、タイマー、字幕翻訳を停止する。開始途中のgetUserMediaが停止後に返った場合もtrackを止める。Workerのcaptureイベントと開始停止を直列化し、遅れたイベントでsessionが復活しないようにする。
 
@@ -103,7 +103,7 @@ HTTP 401/403、404、429、5xx、timeout、network、空/不完全応答を区�
 
 ## 6. 未決事項と残す接続点
 
-正式名、re-MTL前のINSERT許可、MTL/re-MTLの別Provider選択、全画面等の正式対応範囲、永続キー保存、配布範囲と料金は今後決定する。初版を触ってから変更できるものは表1の仮案で進めた。
+re-MTL前のINSERT許可、MTL/re-MTLの別Provider選択、全画面等の正式対応範囲、永続キー保存、配布範囲と料金は今後決定する。初版を触ってから変更できるものは表1の仮案で進めた。
 
 ローカル辞書の初案は `{version:1, entries:[{source:"...",target:"...",from:"ja",to:"en",mode:"preserve|translate"}]}`。regex・公開共有・自動選択は後続。Providerによってprompt/context/glossary適用方法が異なるため、共通の文字列置換で品質保証しない。現在コードには未実装。
 
@@ -116,7 +116,7 @@ YouTube利用条件は確認したが、音声の外部処理やDOM挿入の適�
 | 段階 | 今回の到達点 | 次の合格条件 |
 |---|---|---|
 | P0 設計 | 本書、構成・状態・仮決定を作成 | UIを見て大きな導線を評価 |
-| P1 状態/UI | 実装。42テストと構文検査通過 | ブラウザー目視・キーボード・小画面確認 |
+| P1 状態/UI | 実装。58テストと構文検査通過 | ブラウザー目視・キーボード・小画面確認 |
 | P2 YouTube接続 | Adapter、frame接続、INSERT実装 | A02/A03/A12/A13の実機確認。送信ゼロ、Emote保持 |
 | P3 BYOK | Gemini/Deepgram Adapter、キー境界実装 | 実キー認証、STT中の音声、遷移停止、Provider請求照合 |
 | P4 実配信評価 | 手順のみ | 日英混在・歌/BGM・笑い・短文・固有名詞で遅延/品質/費用測定 |

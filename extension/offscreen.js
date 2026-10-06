@@ -43,7 +43,7 @@ async function begin(s,streamId){
       s.context=new AudioContext();const source=s.context.createMediaStreamSource(media);source.connect(s.context.destination);await s.context.resume();
       if(active!==s)return;
       if(s.context.state!=='running')throw new Error('Audio playback could not resume. Capture stopped.');
-      media.getTracks().forEach(t=>t.onended=()=>fail(s,'Tab audio ended. Start again from the toolbar.'));
+      media.getTracks().forEach(t=>t.onended=()=>fail(s,'Tab audio ended. Start again from the KeroTranslate panel.'));
     }
     s.provider=createSttProvider(s.settings.sttProvider,{key:s.keys.deepgram,language:s.settings.speechLanguage,samples:FIXTURES,onResult:event=>cue(s,event),onBytes:n=>s.metrics.audioBytes+=n,onError:error=>fail(s,error),onOpen:()=>{
       status(s,s.settings.sttProvider==='demo'?'DEMO':'LISTENING');s.lastSpeech=s.started=Date.now();

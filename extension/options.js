@@ -8,6 +8,6 @@ const labels=['Top left','Top center','Top right','Middle left','Middle center',
 q('settings').onsubmit=async e=>{
   e.preventDefault();const settings=Object.fromEntries(fields.map(f=>[f,q(f).value]));
   const r=await chrome.runtime.sendMessage({type:'SAVE_SETTINGS',settings,keys:{gemini:q('gemini').value.trim(),deepgram:q('deepgram').value.trim()}});
-  q('message').textContent=r.ok?'Saved. Start captions from the extension toolbar on a live watch page.':r.error;
+  q('message').textContent=r.ok?'Saved. Start captions from the KeroTranslate panel on a live watch page.':r.error;
 };
 q('clear').onclick=async()=>{const r=await chrome.runtime.sendMessage({type:'CLEAR_KEYS'});if(r.ok){q('gemini').value='';q('deepgram').value='';q('message').textContent='Both keys deleted. Capture and pending requests stopped.';}else q('message').textContent=r.error;};
