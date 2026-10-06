@@ -125,10 +125,28 @@ const style=`
 :host{all:initial;display:block;color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#edf3ee;font-size:13px}*{box-sizing:border-box}button,textarea,select,input{font:inherit}button,select{cursor:pointer}button{border:1px solid #3b4842;color:#d5ded8;background:#26322c;border-radius:7px;padding:7px 11px;font-size:11px;font-weight:700}button:hover:not(:disabled){background:#354a3d;border-color:#a5e58b}button:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid #b2eb92;outline-offset:2px}button:disabled{opacity:.35;cursor:default}.panel{background:#17201b;border:1px solid #34433a;border-radius:12px;overflow:hidden;box-shadow:0 10px 30px #0002}.head{display:flex;align-items:center;gap:9px;padding:13px 15px;border-bottom:1px solid #34433a}.frog{display:grid;place-items:center;border-radius:8px;width:29px;height:29px;background:#b0eb90;color:#172714;font-size:20px}.brand{font-size:14px;font-weight:750;letter-spacing:-.3px}.tag{font-size:9px;letter-spacing:1px;color:#bfd6ba;margin-left:auto}.gear{background:transparent;padding:5px 9px}.body{padding:12px 15px}.bar{display:flex;align-items:center;gap:8px;margin-bottom:13px}.bar select{background:#223027;color:#e2f0df;border:1px solid #3a493e;padding:5px 7px;border-radius:6px;font-size:11px}.phase{margin-left:auto;color:#b7d899;font-size:9px;letter-spacing:.7px}.phase[data-state=ERROR]{color:#ffbd9c}.phase[data-state=STALE]{color:#e1c48c}.label{display:flex;align-items:center;justify-content:space-between;font-weight:650;font-size:11px;color:#c9d7cb;margin-bottom:6px}.label span{font-weight:400;color:#8ea093;font-size:10px}textarea{resize:vertical;min-height:55px;max-height:150px;width:100%;border:1px solid #3d4b41;border-radius:7px;background:#101914;color:#f4f7f2;padding:9px 10px;line-height:1.5;font-size:12px}textarea:disabled{color:#9da59f}.row-actions{display:flex;align-items:center;justify-content:space-between;margin:5px 0 13px}.micro{font-size:9px;color:#99ac9c}.insert{background:#b4eb94;color:#16240f;border-color:#b4eb94}.insert:hover:not(:disabled){background:#c9f5b1;color:#16240f}.back{border-left:2px solid #768f62;padding:1px 0 1px 10px;color:#b7c7b9;font-size:12px;line-height:1.5;min-height:27px;white-space:pre-wrap;overflow-wrap:anywhere}.back-label{color:#a9bf9f;font-size:10px;letter-spacing:.3px;margin-bottom:4px}.foot{padding:10px 15px;border-top:1px solid #34433a;color:#9caf9e;font-size:10px;line-height:1.5}.notice{color:#efd3ac;font-size:11px;line-height:1.5;white-space:pre-wrap;margin:8px 0}.hidden{display:none!important}.conflict{padding:10px;background:#3a3326;border-radius:6px;color:#efdfbd;font-size:11px}.conflict button{margin:8px 4px 0 0}.tools{display:flex;gap:7px}.muted{opacity:.55}
 `;
 
-function mountComposer(host,{translate,insert,settings,openSettings=()=>{},demo=false}){
+function mountComposer(host,{translate,insert,settings,openSettings=()=>{},captureAction,demo=false}){
   const root=host.attachShadow({mode:'closed'});
   root.innerHTML=`<style>${style}</style><section class="panel" aria-label="KeroTranslate composer"><header class="head"><span class="frog" aria-hidden="true">♧</span><span class="brand">KeroTranslate</span><span class="tag">${demo?'DEMO':'LOCAL PoC'}</span><button class="gear" aria-label="Open settings">⚙</button></header><div class="body"><div class="bar"><select aria-label="Translation direction"><option value="ja">JA → EN</option><option value="en">EN → JA</option></select><span class="micro provider"></span><span class="phase" role="status"></span></div><label class="label" for="original">Original <span>Your words</span></label><textarea id="original" maxlength="2000" placeholder="Say something to the stream…"></textarea><div class="row-actions"><span class="micro count">0 / 2000</span><button class="original-insert">INSERT ↗</button></div><label class="label" for="mtl">MTL <span>Translation · editable when current</span></label><textarea id="mtl" maxlength="2000" placeholder="Your translation will appear here"></textarea><div class="row-actions"><span class="micro timing">Waiting for your words</span><button class="mtl-insert insert">INSERT ↗</button></div><div class="back-label">re-MTL <span class="micro">/ meaning check</span></div><div class="back" aria-live="polite">—</div><div class="notice" role="status"></div><div class="conflict hidden">YouTube already has a draft. Replace it?<div><button class="replace">Replace draft</button><button class="keep">Keep draft</button></div></div><div class="tools"><button class="retry hidden">Retry</button><button class="sample ${demo?'':'hidden'}">Try sample</button></div></div><footer class="foot">INSERT fills the chat input. It never sends.<br>re-MTL helps you check meaning; it cannot guarantee accuracy.</footer></section>`;
   const q=s=>root.querySelector(s);let pending=null,busy=false,mtlComposing=false;
+  let captureBusy=false,captureValue='STOPPED';
+  const controls=document.createElement('div');controls.className='capture-controls';
+  controls.innerHTML='<div class="bar"><button class="capture-start insert">Start captions</button><button class="capture-stop">Stop</button><span class="capture-state micro" role="status">STOPPED</span></div><div class="capture-message notice" role="status"></div>';
+  if(captureAction)q('.body').prepend(controls);
+  function captureStatus({status='STOPPED',error=''}){
+    captureValue=status;if(!captureAction)return;
+    controls.querySelector('.capture-state').textContent=status;
+    controls.querySelector('.capture-message').textContent=error;
+    controls.querySelector('.capture-start').disabled=captureBusy||!['STOPPED','ERROR'].includes(status);
+    controls.querySelector('.capture-stop').disabled=captureBusy||status==='STOPPED';
+  }
+  async function controlCapture(action){
+    if(captureBusy)return;captureBusy=true;captureStatus({status:captureValue});
+    try{const r=await captureAction(action);captureStatus({status:r.ok?r.status:captureValue,error:r.ok?r.error:r.error||'Capture unavailable.'});}
+    catch{captureStatus({status:captureValue,error:'Extension unavailable. Reload this YouTube page.'});}
+    finally{captureBusy=false;const error=controls.querySelector('.capture-message').textContent;captureStatus({status:captureValue,error});}
+  }
+  controls.querySelector('.capture-start').onclick=()=>controlCapture('start');controls.querySelector('.capture-stop').onclick=()=>controlCapture('stop');captureStatus({});
   const state=new Composer({translate,onChange:s=>{
     q('.phase').textContent=s.phase;q('.phase').dataset.state=s.phase;
     if(q('#original').value!==s.original)q('#original').value=s.original;
@@ -168,7 +186,7 @@ function mountComposer(host,{translate,insert,settings,openSettings=()=>{},demo=
   q('.original-insert').onclick=()=>insertText('original');q('.mtl-insert').onclick=()=>insertText('mtl');
   q('.replace').onclick=()=>{if(pending)insertText(pending.kind,true);};
   q('.keep').onclick=()=>{pending=null;q('.conflict').classList.add('hidden');};
-  return {state,refresh,dispose:()=>{state.dispose();host.remove();}};
+  return {state,refresh,captureStatus,dispose:()=>{state.dispose();host.remove();}};
 }
 
 function mountCaptions(host,settings){

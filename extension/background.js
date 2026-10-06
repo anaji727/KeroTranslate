@@ -30,8 +30,13 @@ async function start(tabId){
   await offscreen();
   const id=crypto.randomUUID();
   // Demo never captures real audio.
-  const streamId=config.sttProvider==='deepgram'?await chrome.tabCapture.getMediaStreamId({targetTabId:tabId}):null;
+  let streamId=null;
+  if(config.sttProvider==='deepgram'){
+    try{streamId=await chrome.tabCapture.getMediaStreamId({targetTabId:tabId});}
+    catch{throw new Error('Open the KeroTranslate toolbar icon once on this YouTube tab, then press Start captions here again. If capture is already active elsewhere, stop it first.');}
+  }
   await chrome.storage.session.set({capture:{id,tabId,url:tab.url,status:'STARTING',started:Date.now()}});
+  await broadcast(tabId,{type:'CAPTURE_STATUS',status:'STARTING'});
   const reply=await chrome.runtime.sendMessage({target:'offscreen',type:'START',id,streamId,settings:config});
   if(!reply?.ok){await stop();throw new Error('Audio environment unavailable.');}
   await chrome.action.setBadgeBackgroundColor({color:'#315d30'});await chrome.action.setBadgeText({text:config.sttProvider==='demo'?'DEMO':'ON'});
@@ -41,6 +46,13 @@ async function handle(m,sender){
   await ready;if(!trusted(sender)&&!youtube(sender))throw new Error('Unsupported page.');
   if(m.type==='CONFIG')return {settings:await settings()};
   if(m.type==='OPEN_SETTINGS'){await chrome.runtime.openOptionsPage();return {};}
+  if(['PANEL_START','PANEL_STOP','PANEL_STATUS'].includes(m.type)){
+    if(!youtube(sender)||!/^https:\/\/www\.youtube\.com\/live_chat(?:\?|$|\/)/.test(sender.url))throw new Error('Open the live chat panel.');
+    const tabId=sender.tab.id;
+    if(m.type==='PANEL_START')await serial(()=>start(tabId));
+    if(m.type==='PANEL_STOP')await serial(async()=>{if((await capture())?.tabId===tabId)await stop();});
+    const c=await capture();return {status:c?.tabId===tabId?c.status:'STOPPED',error:c?.tabId===tabId?c.error||'':''};
+  }
   if(m.type==='NAVIGATED'){
     for(const [key,item]of pending)if(key.startsWith(`${sender.tab?.id}:${sender.frameId}:`)){item.abort();pending.delete(key);}
     const c=await capture();if(sender.frameId===0&&c?.tabId===sender.tab?.id)await serial(stop);return {};
@@ -79,7 +91,7 @@ async function handle(m,sender){
   if(m.type==='STOP_CAPTURE'){await serial(stop);return {};}
   if(sender.url===chrome.runtime.getURL('offscreen.html'))return serial(async()=>{
     const c=await capture();if(!c||c.id!==m.id)return {};
-    if(m.type==='AUDIO_STATUS'){await chrome.storage.session.set({capture:{...c,status:m.status,error:m.error||''}});await broadcast(c.tabId,{type:'CAPTURE_STATUS',status:m.status});if(m.status==='ERROR')await chrome.action.setBadgeText({text:'ERR'});}
+    if(m.type==='AUDIO_STATUS'){await chrome.storage.session.set({capture:{...c,status:m.status,error:m.error||''}});await broadcast(c.tabId,{type:'CAPTURE_STATUS',status:m.status,error:m.error||''});if(m.status==='ERROR')await chrome.action.setBadgeText({text:'ERR'});}
     if(m.type==='AUDIO_CUE')await broadcast(c.tabId,{type:'CAPTION',cue:m.cue});
     if(m.type==='METRICS')await chrome.storage.session.set({metrics:m.metrics});
     return {};

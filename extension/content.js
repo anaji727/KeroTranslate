@@ -20,8 +20,9 @@
       const renderer=document.querySelector('yt-live-chat-message-input-renderer');
       if(renderer&&(!chatHost?.isConnected)){
         composer?.dispose();const host=document.createElement('div');host.style.cssText='flex:none;max-height:55vh;overflow:auto;margin:0 8px 8px;';
-        const view=mountComposer(host,{settings:config,translate,insert:insertDraft,openSettings:()=>send({type:'OPEN_SETTINGS'})});
+        const view=mountComposer(host,{settings:config,translate,insert:insertDraft,openSettings:()=>send({type:'OPEN_SETTINGS'}),captureAction:action=>send({type:action==='start'?'PANEL_START':'PANEL_STOP'})});
         renderer.before(host);chatHost=host;composer=view;
+        send({type:'PANEL_STATUS'}).then(r=>{if(composer===view&&r.ok)view.captureStatus(r);}).catch(()=>{});
       }
     }else if(window===window.top){
       const player=livePlayer();
@@ -35,6 +36,7 @@
     }
     if(message.type==='CAPTION'){const version=generation;mount().then(()=>{if(version===generation)captions?.show(message.cue);}).catch(()=>{});}
     if(message.type==='CAPTURE_STATUS'&&['STOPPED','ERROR','STARTING'].includes(message.status)){generation++;captions?.clear();}
+    if(message.type==='CAPTURE_STATUS')composer?.captureStatus(message);
     if(message.type==='CONFIG_CHANGED'){config=message.settings;composer?.refresh(config);captions?.configure(config);}
   });
   const observer=new MutationObserver(()=>{if(!queued){queued=true;setTimeout(()=>{queued=false;mount().catch(()=>{});},400);}});

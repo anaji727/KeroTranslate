@@ -1,9 +1,27 @@
 import {Composer} from '../core/composer.js';
 import {style} from './style.js';
-export function mountComposer(host,{translate,insert,settings,openSettings=()=>{},demo=false}){
+export function mountComposer(host,{translate,insert,settings,openSettings=()=>{},captureAction,demo=false}){
   const root=host.attachShadow({mode:'closed'});
   root.innerHTML=`<style>${style}</style><section class="panel" aria-label="KeroTranslate composer"><header class="head"><span class="frog" aria-hidden="true">♧</span><span class="brand">KeroTranslate</span><span class="tag">${demo?'DEMO':'LOCAL PoC'}</span><button class="gear" aria-label="Open settings">⚙</button></header><div class="body"><div class="bar"><select aria-label="Translation direction"><option value="ja">JA → EN</option><option value="en">EN → JA</option></select><span class="micro provider"></span><span class="phase" role="status"></span></div><label class="label" for="original">Original <span>Your words</span></label><textarea id="original" maxlength="2000" placeholder="Say something to the stream…"></textarea><div class="row-actions"><span class="micro count">0 / 2000</span><button class="original-insert">INSERT ↗</button></div><label class="label" for="mtl">MTL <span>Translation · editable when current</span></label><textarea id="mtl" maxlength="2000" placeholder="Your translation will appear here"></textarea><div class="row-actions"><span class="micro timing">Waiting for your words</span><button class="mtl-insert insert">INSERT ↗</button></div><div class="back-label">re-MTL <span class="micro">/ meaning check</span></div><div class="back" aria-live="polite">—</div><div class="notice" role="status"></div><div class="conflict hidden">YouTube already has a draft. Replace it?<div><button class="replace">Replace draft</button><button class="keep">Keep draft</button></div></div><div class="tools"><button class="retry hidden">Retry</button><button class="sample ${demo?'':'hidden'}">Try sample</button></div></div><footer class="foot">INSERT fills the chat input. It never sends.<br>re-MTL helps you check meaning; it cannot guarantee accuracy.</footer></section>`;
   const q=s=>root.querySelector(s);let pending=null,busy=false,mtlComposing=false;
+  let captureBusy=false,captureValue='STOPPED';
+  const controls=document.createElement('div');controls.className='capture-controls';
+  controls.innerHTML='<div class="bar"><button class="capture-start insert">Start captions</button><button class="capture-stop">Stop</button><span class="capture-state micro" role="status">STOPPED</span></div><div class="capture-message notice" role="status"></div>';
+  if(captureAction)q('.body').prepend(controls);
+  function captureStatus({status='STOPPED',error=''}){
+    captureValue=status;if(!captureAction)return;
+    controls.querySelector('.capture-state').textContent=status;
+    controls.querySelector('.capture-message').textContent=error;
+    controls.querySelector('.capture-start').disabled=captureBusy||!['STOPPED','ERROR'].includes(status);
+    controls.querySelector('.capture-stop').disabled=captureBusy||status==='STOPPED';
+  }
+  async function controlCapture(action){
+    if(captureBusy)return;captureBusy=true;captureStatus({status:captureValue});
+    try{const r=await captureAction(action);captureStatus({status:r.ok?r.status:captureValue,error:r.ok?r.error:r.error||'Capture unavailable.'});}
+    catch{captureStatus({status:captureValue,error:'Extension unavailable. Reload this YouTube page.'});}
+    finally{captureBusy=false;const error=controls.querySelector('.capture-message').textContent;captureStatus({status:captureValue,error});}
+  }
+  controls.querySelector('.capture-start').onclick=()=>controlCapture('start');controls.querySelector('.capture-stop').onclick=()=>controlCapture('stop');captureStatus({});
   const state=new Composer({translate,onChange:s=>{
     q('.phase').textContent=s.phase;q('.phase').dataset.state=s.phase;
     if(q('#original').value!==s.original)q('#original').value=s.original;
@@ -43,5 +61,5 @@ export function mountComposer(host,{translate,insert,settings,openSettings=()=>{
   q('.original-insert').onclick=()=>insertText('original');q('.mtl-insert').onclick=()=>insertText('mtl');
   q('.replace').onclick=()=>{if(pending)insertText(pending.kind,true);};
   q('.keep').onclick=()=>{pending=null;q('.conflict').classList.add('hidden');};
-  return {state,refresh,dispose:()=>{state.dispose();host.remove();}};
+  return {state,refresh,captureStatus,dispose:()=>{state.dispose();host.remove();}};
 }

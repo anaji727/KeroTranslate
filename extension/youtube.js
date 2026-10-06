@@ -1,7 +1,7 @@
 // The only module that knows YouTube's private DOM. Fail closed if it changes.
 export function chatInput(doc=document){
   if(!/^\/live_chat\/?$/.test(doc.location.pathname))return null;
-  const nodes=[...doc.querySelectorAll('yt-live-chat-message-input-renderer #input[contenteditable="true"]')].filter(n=>n.getClientRects().length&&n.getAttribute('aria-disabled')!=='true');
+  const nodes=[...doc.querySelectorAll('yt-live-chat-message-input-renderer #input[contenteditable]')].filter(n=>['','true','plaintext-only'].includes(n.getAttribute('contenteditable'))&&n.getClientRects().length&&n.getAttribute('aria-disabled')!=='true');
   return nodes.length===1?nodes[0]:null;
 }
 export function insertDraft(text,{replace=false,expected}={},doc=document){

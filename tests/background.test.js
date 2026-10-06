@@ -21,3 +21,15 @@ test('capture refuses a live player whose overlay failed initialization',async()
   try{const r=await message({type:'START_CAPTURE',tabId:42},options);assert.equal(r.ok,false);assert.match(r.error,/overlay/);assert.equal(data.session.capture,undefined);}
   finally{chrome.tabs.sendMessage=send;}
 });
+test('panel controls use the sender tab and cannot stop another tab or read private state',async()=>{
+  data.session.capture={id:'other',tabId:99,status:'LISTENING',error:'private'};
+  const r=await message({type:'PANEL_STOP',tabId:99});assert.equal(data.session.capture.tabId,99);assert.equal(r.status,'STOPPED');assert.equal(r.error,'');assert.equal(r.capture,undefined);
+  data.session.capture={id:'own',tabId:42,status:'LISTENING'};assert.equal((await message({type:'PANEL_STATUS'})).status,'LISTENING');
+  await message({type:'PANEL_STOP'});assert.equal(data.session.capture,undefined);
+  assert.equal((await message({type:'PANEL_START'}, {...content,url:'https://example.com/'})).ok,false);
+});
+test('panel start ignores a supplied tab ID and targets its own live watch tab',async()=>{
+  const get=chrome.tabs.get,send=chrome.tabs.sendMessage;let selected;
+  chrome.tabs.get=async id=>{selected=id;return {url:'https://www.youtube.com/watch?v=test'};};chrome.tabs.sendMessage=async()=>({live:true,overlayReady:false});
+  try{assert.equal((await message({type:'PANEL_START',tabId:99})).ok,false);assert.equal(selected,42);}finally{chrome.tabs.get=get;chrome.tabs.sendMessage=send;}
+});
