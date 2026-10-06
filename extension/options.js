@@ -1,4 +1,4 @@
-const fields=['sttProvider','translationProvider','model','source','speechLanguage','captionTarget','captionMode','captionLines','captionPosition'];
+const fields=['sttProvider','translationProvider','model','source','speechLanguage','captionTarget','captionMode','captionLines','captionPosition','captionSize','captionDuration'];
 const q=id=>document.getElementById(id);
 const result=await chrome.runtime.sendMessage({type:'PRIVATE_CONFIG'});
 if(result.ok){for(const f of fields)q(f).value=result.settings[f];q('gemini').value=result.keys.gemini||'';q('deepgram').value=result.keys.deepgram||'';}
