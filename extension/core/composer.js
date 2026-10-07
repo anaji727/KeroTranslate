@@ -1,8 +1,9 @@
+import {DEFAULTS} from './settings.js';
 // Framework-independent state machine. A revision covers source, direction and settings.
 export class Composer {
   constructor({translate,onChange=()=>{},debounce=650}) {
     Object.assign(this,{translate,onChange,debounce,revision:0,composing:false,disposed:false});
-    this.state={original:'',mtl:'',back:'',phase:'EMPTY',source:'ja',target:'en',error:'',elapsed:0};
+    this.state={original:'',mtl:'',back:'',phase:'EMPTY',source:DEFAULTS.source,target:DEFAULTS.target,error:'',elapsed:0};
   }
   emit(){this.onChange({...this.state});}
   invalidate(){clearTimeout(this.timer);this.controller?.abort();this.revision++;}

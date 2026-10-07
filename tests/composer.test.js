@@ -13,7 +13,7 @@ test('late responses never replace a newer original',async()=>{
   assert.equal(c.state.original,'new');assert.equal(c.state.mtl,'');assert.equal(c.state.phase,'STALE');assert.equal(calls.length,1);c.dispose();
 });
 test('old back translation is ignored after a direction change',async()=>{
-  const {c,calls}=controlled();c.input('first');const task=c.run();calls[0].resolve('translation');await turn();c.configure({source:'en'});calls[1].resolve('obsolete');await task;assert.equal(c.state.back,'');assert.equal(c.canInsert('mtl'),false);assert.equal(c.state.target,'ja');c.dispose();
+  const {c,calls}=controlled();c.input('first');const task=c.run();calls[0].resolve('translation');await turn();c.configure({source:'ja'});calls[1].resolve('obsolete');await task;assert.equal(c.state.back,'');assert.equal(c.canInsert('mtl'),false);assert.equal(c.state.target,'en');c.dispose();
 });
 test('IME composition does not issue requests until composition ends',async()=>{
   let n=0;const c=new Composer({debounce:1,translate:async()=>{n++;return 'text';}});c.compositionStart();c.input('に');await new Promise(r=>setTimeout(r,15));await c.run();assert.equal(n,0);c.compositionEnd('日本語');await new Promise(r=>setTimeout(r,15));assert.equal(n,2);c.dispose();

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "KeroTranslate",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "minimum_chrome_version": "116",
   "description": "EN / JA captions and comment drafting. INSERT never sends.",
   "permissions": [
@@ -45,7 +45,8 @@
       "resources": [
         "core/*.js",
         "ui/*.js",
-        "youtube.js"
+        "youtube.js",
+        "assets/kero-frog.png"
       ],
       "matches": [
         "https://www.youtube.com/*"

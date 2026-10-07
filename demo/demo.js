@@ -10,7 +10,7 @@ const composer=mountComposer(q('#composer-host'),{settings,demo:true,translate:d
   if(input.value&&(!replace||expected!==input.value))return {conflict:true,expected:input.value};
   input.value=text;input.focus();q('#draft-status').textContent='Inserted · not sent';return {message:'Inserted into the demo input. No posting is available here.'};
 }});
-composer.state.input('今日も配信ありがとう！');
+composer.state.input('Thanks for streaming today!');
 let stages=[];
 function sample(){
   stages.forEach(clearTimeout);stages=[];

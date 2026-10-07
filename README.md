@@ -5,9 +5,7 @@ YouTube Liveの音声字幕と、自分のコメント翻訳を支援するChrom
 
 **INSERTはYouTubeの入力欄に下書きを入れるだけ。投稿は自分で行います。**
 
-GitHub掲載版: **0.1.8**。ローカルの次版: **Beta 0.1.9**（2026-10-07）。
-
-**Beta 0.1.9のコードと配布ファイルは、まだこのリポジトリへ反映していません。以下のダウンロードリンクは0.1.8です。**
+現在のバージョン: **Beta 0.1.9**（2026-10-07）。
 リポジトリ・プロダクトの正式表記は **KeroTranslate** です。
 
 ## ダウンロード
@@ -95,7 +93,7 @@ partialを見るには **Original + MTL** または **Original only** を選び�
 
 ## コメント作成
 
-Beta 0.1.9では、**Composer original language** の初期値を **English → Japanese**（英語入力→日本語訳）に変更しています。保存済みの設定は保持するため、既存環境では **Settings → 02 / Languages** から必要に応じて選択・保存してください。配信の音声言語・字幕の翻訳先は、この設定とは独立しています。
+Composer original languageの初期値は **English → Japanese**（英語入力→日本語訳）です。保存済みの設定は保持します。メインパネルには作成済みの緑・白のカエルアイコンを表示します。
 
 1. Originalにコメントを入力し、JA → EN / EN → JAを選びます。
 2. MTL（翻訳）とre-MTL（意味確認用の再翻訳）を確認します。再翻訳は正確さの保証ではありません。
@@ -143,7 +141,7 @@ VAD終端のユーザー設定、後続文マージ、固有名詞補正、区�
 node --test tests/*.test.js
 node tools/check.js
 node tools/standalone.js
-Compress-Archive -Path extension/* -DestinationPath artifacts/KeroTranslate-Extension.zip -Force
+./tools/package.ps1
 node tools/serve.js
 ```
 
@@ -162,7 +160,7 @@ node tools/serve.js
 
 ## 更新履歴
 
-- **Beta 0.1.9（ローカル実装済み・GitHub反映待ち）**: コメント翻訳の初期方向をEnglish → Japaneseへ変更。メインパネルのアイコンを緑・白のカエルへ差し替え。メインパネル・ポップアップ・設定画面のLOCAL PoC表記をBeta＋バージョン番号へ統一。パッケージ作成時にmanifestのバージョン番号から表示を更新。既存93件のオフラインテスト・構文チェックは通過、今回のUI変更の実ブラウザー確認は未実施。
+- **Beta 0.1.9**: コメント翻訳の初期方向をEnglish → Japaneseへ変更。メインパネルを緑・白のカエルアイコンへ差し替え。メインパネル・ポップアップ・設定画面のLOCAL PoC表記をBeta＋バージョン番号へ統一。パッケージ作成時にmanifestからバージョン表示を更新。
 - **0.1.8**: 字幕・コメント・再翻訳の送信キューを統合。同じProviderは同時1件、コメント優先、最小送信間隔と制限エラー後の一時停止を追加。
 - **0.1.7**: ツールバーポップアップにStart captions / Stopを追加。往復不要の開始導線、タブ別状態・停止、オーバーレイ初期化の再試行・再接続を修正。
 - **0.1.6**: OpenAIのSTT・翻訳、DeepL VoiceのSTT・Free/Pro翻訳、DeepSeek翻訳を追加。設定・キー管理・字幕順序の処理・テストを更新。
