@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 let listener;const sent=[];const worker={id:'test'};
-globalThis.chrome={runtime:{id:'test',getURL:p=>`chrome-extension://test/${p}`,onMessage:{addListener(f){listener=f;}},async sendMessage(m){sent.push(m);if(m.type==='PRIVATE_CONFIG')return {ok:true,keys:{deepgram:'fake'}};return {ok:true};}}};
+globalThis.chrome={runtime:{id:'test',getURL:p=>`chrome-extension://test/${p}`,onMessage:{addListener(f){listener=f;}},async sendMessage(m){sent.push(m);if(m.type==='PRIVATE_CONFIG')return {ok:true,keys:{deepgram:'fake'}};if(m.type==='CAPTION_TRANSLATE'){await new Promise(r=>setTimeout(r,350));return {ok:true,text:'translated'};}return {ok:true};}}};
 await import('../extension/offscreen.js');
 const turn=()=>new Promise(r=>setTimeout(r,0));
 const config={sttProvider:'demo',translationProvider:'demo',captionTarget:'en',captionMode:'both'};

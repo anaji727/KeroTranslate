@@ -55,3 +55,21 @@ test('popup stop is scoped to its tab and cannot stop a different active tab',as
   data.session.capture={id:'other',tabId:99,status:'LISTENING'};await message({type:'STOP_CAPTURE',tabId:42},options);assert.equal(data.session.capture.tabId,99);
   await message({type:'STOP_CAPTURE',tabId:99},options);assert.equal(data.session.capture,undefined);
 });
+test('caption translation RPC rejects content scripts, non-audio pages and ended sessions',async()=>{
+  const request={type:'CAPTION_TRANSLATE',id:'gone',requestId:'r',request:{text:'x'}};
+  for(const sender of [content,options,audio])assert.equal((await message(request,sender)).ok,false);
+});
+test('worker serializes real caption, comment and back-translation HTTP together',async()=>{
+  data.local.settings={translationProvider:'gemini',translationInterval:500,captionTarget:'en'};data.session.keys={gemini:'fake'};data.session.capture={id:'queue-session',tabId:42};
+  const oldFetch=globalThis.fetch,order=[];let finish,active=0,maximum=0;
+  const response=()=>({ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:'translated'}]}}]})});
+  globalThis.fetch=async(_url,o)=>{active++;maximum=Math.max(maximum,active);const text=JSON.parse(o.body).contents[0].parts[0].text;order.push(text);if(text==='caption one')await new Promise(r=>finish=r);active--;return response();};
+  try{
+    const caption=n=>message({type:'CAPTION_TRANSLATE',id:'queue-session',requestId:n,request:{text:n}},audio);
+    const first=caption('caption one');for(let i=0;i<30;i++)await Promise.resolve();assert.deepEqual(order,['caption one']);
+    const second=caption('caption two');const comment=message({type:'TRANSLATE',id:'comment',request:{text:'comment',source:'ja',target:'en'}});
+    for(let i=0;i<20;i++)await Promise.resolve();assert.equal(order.length,1);finish();assert.equal((await first).ok,true);assert.equal((await comment).ok,true);
+    assert.equal((await message({type:'TRANSLATE',id:'back',request:{text:'back',source:'en',target:'ja'}})).ok,true);assert.equal((await second).ok,true);
+    assert.equal(maximum,1);assert.deepEqual(order,['caption one','comment','back','caption two']);
+  }finally{globalThis.fetch=oldFetch;data.local.settings={};delete data.session.capture;}
+});

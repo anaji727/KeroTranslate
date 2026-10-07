@@ -1,4 +1,4 @@
-const fields=['sttProvider','translationProvider','model','openaiModel','deepseekModel','deeplPlan','source','speechLanguage','captionTarget','captionMode','captionLines','captionPosition','captionSize','captionDuration'];
+const fields=['sttProvider','translationProvider','model','openaiModel','deepseekModel','deeplPlan','translationInterval','source','speechLanguage','captionTarget','captionMode','captionLines','captionPosition','captionSize','captionDuration'];
 const keyNames=['gemini','deepgram','openai','deepl','deepseek'];
 const q=id=>document.getElementById(id);
 const result=await chrome.runtime.sendMessage({type:'PRIVATE_CONFIG'});

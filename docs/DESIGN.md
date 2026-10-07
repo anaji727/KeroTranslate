@@ -126,3 +126,7 @@ YouTube利用条件は確認したが、音声の外部処理やDOM挿入の適�
 
 初版コードはP1〜P3の土台を並行して作ったが、統合確認が済むまではP3完了・PoC合格としない。確認方法とA01〜A15はACCEPTANCE.mdにまとめる。
 
+
+## 0.1.8 — 翻訳キューの共通化
+
+字幕側のoffscreenからProviderを直接呼ぶ構造を廃止し、session ID付きのCAPTION_TRANSLATEをworkerへ送信する。workerは送信者と現在のcapture IDを検証し、コメント・字幕を同じProvider別キューで処理する。Stopとキー削除は字幕リクエストも取消。HTTP timeout 20秒はキュー待機時間を含まず、実行開始時から数える。初期の最小開始間隔4秒はアカウントの上限を保証する値ではなく設定で変更できる。

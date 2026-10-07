@@ -1,5 +1,7 @@
 import {sanitizeSettings} from './core/settings.js';
 import {translate} from './core/providers.js';
+import {TranslationQueue} from './core/translation-queue.js';
+const translations=new TranslationQueue(),captionPending=new Map();
 const pending=new Map();let lifecycle=Promise.resolve();
 const ready=Promise.all([chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'}),chrome.storage.session.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'})]);
 const trusted=sender=>sender.id===chrome.runtime.id&&sender.url?.startsWith(chrome.runtime.getURL(''));
@@ -13,6 +15,7 @@ async function offscreen(){
   if(!contexts.length)await chrome.offscreen.createDocument({url:'offscreen.html',reasons:['USER_MEDIA'],justification:'Process user-selected YouTube tab audio and preserve audible playback.'});
 }
 async function stop(){
+  for(const controller of captionPending.values())controller.abort();captionPending.clear();
   const c=await capture();await chrome.storage.session.remove('capture');
   await chrome.runtime.sendMessage({target:'offscreen',type:'STOP'}).catch(()=>{});
   if(c)await broadcast(c.tabId,{type:'CAPTURE_STATUS',status:'STOPPED'});
@@ -74,11 +77,24 @@ async function handle(m,sender){
     const controller=new AbortController();pending.set(key,controller);
     try{
       const config=await settings(),keys=(await chrome.storage.session.get('keys')).keys||{};
-      const text=await translate({...m.request,signal:controller.signal},config,keys);
+      const text=await translations.schedule({provider:config.translationProvider,signal:controller.signal,priority:1,intervalMs:config.translationProvider==='demo'?0:config.translationInterval,run:()=>translate({...m.request,signal:controller.signal},config,keys)});
       return {text};
     }finally{if(pending.get(key)===controller)pending.delete(key);}
   }
   if(!trusted(sender))throw new Error('Open extension settings for this action.');
+  if(m.type==='CAPTION_TRANSLATE'||m.type==='CAPTION_CANCEL'){
+    if(sender.tab||sender.url!==chrome.runtime.getURL('offscreen.html'))throw new Error('Caption translation is only available to audio capture.');
+    if(typeof m.id!=='string'||m.id.length>80||typeof m.requestId!=='string'||m.requestId.length>80)throw new Error('Invalid caption request.');
+    const key=`${m.id}:${m.requestId}`;
+    if(m.type==='CAPTION_CANCEL'){captionPending.get(key)?.abort();return {};}
+    const controller=new AbortController();captionPending.set(key,controller);
+    try{
+      const c=await capture();if(!c||c.id!==m.id)throw new Error('Caption session has ended.');
+      const config=await settings(),keys=(await chrome.storage.session.get('keys')).keys||{};let usage={};
+      const text=await translations.schedule({provider:config.translationProvider,signal:controller.signal,priority:0,intervalMs:config.translationProvider==='demo'?0:config.translationInterval,run:()=>translate({text:m.request?.text,source:'auto',target:config.captionTarget,signal:controller.signal},config,keys,u=>{usage=u;})});
+      return {text,usage};
+    }finally{if(captionPending.get(key)===controller)captionPending.delete(key);}
+  }
   if(m.type==='PRIVATE_CONFIG')return {settings:await settings(),keys:(await chrome.storage.session.get('keys')).keys||{}};
   if(m.type==='STATUS')return {capture:await capture(),settings:await settings(),metrics:(await chrome.storage.session.get('metrics')).metrics||{}};
   if(m.type==='TEST_OVERLAY'){
@@ -107,7 +123,7 @@ async function handle(m,sender){
 }
 chrome.runtime.onMessage.addListener((m,sender,reply)=>{
   if(m.target==='offscreen')return;
-  handle(m,sender).then(result=>reply({ok:true,...result}),error=>reply({ok:false,error:error.message||'Operation failed.'}));return true;
+  handle(m,sender).then(result=>reply({ok:true,...result}),error=>reply({ok:false,error:error.message||'Operation failed.',code:error.code}));return true;
 });
 chrome.tabs.onRemoved.addListener(tabId=>{serial(async()=>{if((await capture())?.tabId===tabId)await stop();});for(const [key,c]of pending)if(key.startsWith(`${tabId}:`)){c.abort();pending.delete(key);}});
 chrome.tabs.onUpdated.addListener((tabId,change)=>{if(change.url||change.status==='loading')serial(async()=>{if((await capture())?.tabId===tabId)await stop();});});

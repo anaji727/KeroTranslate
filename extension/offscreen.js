@@ -1,4 +1,5 @@
-import {translate,FIXTURES} from './core/providers.js';
+import {FIXTURES} from './core/providers.js';
+import {queuedTranslate} from './core/translation-client.js';
 import {createSttProvider} from './core/stt.js';
 let active=null;
 function notify(s,type,data={}){if(active===s)chrome.runtime.sendMessage({type,id:s.id,...data}).catch(()=>{});}
@@ -29,7 +30,7 @@ async function cue(s,{text,final,id,sequence:providerSequence}){
 async function translateCue(s,{id,text,sequence}){
   const controller=s.controller=new AbortController();const begin=performance.now();s.metrics.requests++;
   try{
-    const out=await translate({text,source:'auto',target:s.settings.captionTarget,signal:controller.signal},s.settings,s.keys,u=>{s.metrics.inputTokens+=(u.promptTokenCount||0);s.metrics.outputTokens+=(u.candidatesTokenCount||0)+(u.thoughtsTokenCount||0);s.metrics.billedCharacters=(s.metrics.billedCharacters||0)+(u.billedCharacters||0);});
+    const out=await queuedTranslate({sessionId:s.id,text,target:s.settings.captionTarget,signal:controller.signal},u=>{s.metrics.inputTokens+=(u.promptTokenCount||0);s.metrics.outputTokens+=(u.candidatesTokenCount||0)+(u.thoughtsTokenCount||0);s.metrics.billedCharacters=(s.metrics.billedCharacters||0)+(u.billedCharacters||0);});
     if(active!==s||controller.signal.aborted)return;
     s.metrics.lastTranslationMs=Math.round(performance.now()-begin);
     notify(s,'AUDIO_CUE',{cue:{id,sequence,phase:'translated',original:text,translation:out,pendingNext:!!s.queued}});

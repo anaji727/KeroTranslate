@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import vm f
 test('ongoing speech does not cancel translations; waiting work is bounded and Stop suppresses results',async()=>{
   const sent=[],requests=[];let listener,emit;
   const source=(await readFile(new URL('../extension/offscreen.js',import.meta.url),'utf8')).replace(/^import .*;\r?\n/gm,'');
-  const context={AbortController,Date,performance,clearInterval(){},setInterval(){},FIXTURES:[],translate:(request)=>new Promise(resolve=>requests.push({request,resolve})),createSttProvider:(_name,options)=>{emit=options.onResult;return {start(){options.onOpen();},stop(){}};},chrome:{runtime:{id:'test',getURL:p=>p,onMessage:{addListener(fn){listener=fn;}},async sendMessage(m){sent.push(m);return {ok:true,keys:{}};}}}};
+  const context={AbortController,Date,performance,clearInterval(){},setInterval(){},FIXTURES:[],queuedTranslate:(request)=>new Promise(resolve=>requests.push({request,resolve})),createSttProvider:(_name,options)=>{emit=options.onResult;return {start(){options.onOpen();},stop(){}};},chrome:{runtime:{id:'test',getURL:p=>p,onMessage:{addListener(fn){listener=fn;}},async sendMessage(m){sent.push(m);return {ok:true,keys:{}};}}}};
   vm.runInNewContext(source,context);
   const send=m=>listener({target:'offscreen',...m},{id:'test'},()=>{});
   const flush=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
