@@ -21,8 +21,14 @@ async function stop(){
 async function start(tabId){
   await stop();const tab=await chrome.tabs.get(tabId);
   if(!/^https:\/\/www\.youtube\.com\/watch\?/.test(tab.url||''))throw new Error('Open a YouTube Live watch page first.');
-  const check=await chrome.tabs.sendMessage(tabId,{type:'CHECK_LIVE'},{frameId:0}).catch(()=>null);
-  if(!check?.live)throw new Error('A live player was not detected. Reload the live watch page.');
+  let check;
+  for(let attempt=0;attempt<3;attempt++){
+    check=await chrome.tabs.sendMessage(tabId,{type:'CHECK_LIVE'},{frameId:0}).catch(()=>null);
+    if(check)break;
+    if(attempt<2)await new Promise(resolve=>setTimeout(resolve,150));
+  }
+  if(!check)throw new Error('KeroTranslate is not connected to this page. Reload YouTube once after updating the extension, then start from the toolbar popup.');
+  if(!check.live)throw new Error('A live player is not ready. Wait for the live video to load, then try Start captions again.');
   if(!check.overlayReady)throw new Error(check.error||'Caption overlay is unavailable. Reload this YouTube page.');
   const config=await settings();const keys=(await chrome.storage.session.get('keys')).keys||{};
   const names={deepgram:'Deepgram',gemini:'Gemini',openai:'OpenAI',deepl:'DeepL',deepseek:'DeepSeek'};
@@ -34,7 +40,7 @@ async function start(tabId){
   let streamId=null;
   if(config.sttProvider!=='demo'){
     try{streamId=await chrome.tabCapture.getMediaStreamId({targetTabId:tabId});}
-    catch{throw new Error('Open the KeroTranslate toolbar icon once on this YouTube tab, then press Start captions here again. If capture is already active elsewhere, stop it first.');}
+    catch{throw new Error('Open the KeroTranslate toolbar icon on this YouTube tab and press Start captions in that popup. If another extension is capturing this tab, stop its capture first.');}
   }
   await chrome.storage.session.set({capture:{id,tabId,url:tab.url,status:'STARTING',started:Date.now()}});
   await broadcast(tabId,{type:'CAPTURE_STATUS',status:'STARTING'});
@@ -89,7 +95,7 @@ async function handle(m,sender){
   }
   if(m.type==='CLEAR_KEYS'){await serial(stop);for(const c of pending.values())c.abort();pending.clear();await chrome.storage.session.remove('keys');return {};}
   if(m.type==='START_CAPTURE'){await serial(()=>start(m.tabId));return {};}
-  if(m.type==='STOP_CAPTURE'){await serial(stop);return {};}
+  if(m.type==='STOP_CAPTURE'){await serial(async()=>{if(m.tabId===undefined||(await capture())?.tabId===m.tabId)await stop();});return {};}
   if(sender.url===chrome.runtime.getURL('offscreen.html'))return serial(async()=>{
     const c=await capture();if(!c||c.id!==m.id)return {};
     if(m.type==='AUDIO_STATUS'){await chrome.storage.session.set({capture:{...c,status:m.status,error:m.error||''}});await broadcast(c.tabId,{type:'CAPTURE_STATUS',status:m.status,error:m.error||''});if(m.status==='ERROR')await chrome.action.setBadgeText({text:'ERR'});}

@@ -4,7 +4,7 @@
 
 ## 実施済み
 
-Nodeによる76件のテストが成功。構文とmanifestエントリーファイルの存在を確認。単体HTMLにまとめたJavaScriptも構文検査済み。
+Nodeによる83件のテストが成功。構文とmanifestエントリーファイルの存在を確認。単体HTMLにまとめたJavaScriptも構文検査済み。
 
 追加でローカルHTTPサーバーを起動し、Windowsでルートパス末尾の区切りが重複して正常ファイルまで403になる判定を修正。HTML、CSS、全依存JavaScriptのHTTP 200とContent-Type、存在しないファイルの404、公開ルート外へのアクセスの403を確認した。これはHTTP配信の確認であり、ブラウザー表示・操作の検証とは区別する。
 
@@ -14,7 +14,7 @@ Nodeによる76件のテストが成功。構文とmanifestエントリーファ
 
 ## 優先する確認順
 
-1. Chromeへ読み込み、拡張エラーがないこと。設定画面とデモUIが表示されること。
+1. Chromeへ読み込み、拡張エラーがないこと。設定画面とデモUIが表示されること。対象タブのツールバーポップアップ内でStart captions → Stopまで完結し、メインパネルへ戻らず開始できること。
 2. YouTubeの通常ライブ画面でチャットComposerの位置、入力欄、Emoteが使えること。
 3. 投稿せず、空/文字あり/Emoteだけの下書きにOriginal/MTLをINSERTする。候補の投稿は不要。
 4. 各翻訳Providerのキーで短い1文を翻訳し、方向変更・連続入力・MTL編集・IME・再翻訳を確認。
@@ -84,3 +84,7 @@ await chrome.storage.session.get('metrics')
 - 字幕領域やComposerはページに依存するため、YouTubeの実機統合テストが必要。
 - 日本語200文字と絵文字の扱いは初版ではJS string lengthによる保守的制限。YouTubeの実際のカウントとの完全一致は保証しない。
 
+
+## 0.1.7の追加確認
+
+ポップアップの開始・停止とタブ別表示、別タブを誤停止しないこと、オーバーレイの一時失敗・切り離しからの復旧をオフラインテスト済み。実Chromeでのタブ音声権限と初回開始は未検証。Chromeの制約は[公式tabCapture資料](https://developer.chrome.com/docs/extensions/reference/api/tabCapture)を参照。

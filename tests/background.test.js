@@ -51,3 +51,7 @@ test('new real STT providers require their own key and capture the selected tab'
     assert.equal(sent.findLast(m=>m.target==='offscreen'&&m.type==='START').streamId,'stream');await message({type:'STOP_CAPTURE'},options);
   }assert.equal(captures,2);}finally{chrome.tabs.sendMessage=send;data.local.settings={};}
 });
+test('popup stop is scoped to its tab and cannot stop a different active tab',async()=>{
+  data.session.capture={id:'other',tabId:99,status:'LISTENING'};await message({type:'STOP_CAPTURE',tabId:42},options);assert.equal(data.session.capture.tabId,99);
+  await message({type:'STOP_CAPTURE',tabId:99},options);assert.equal(data.session.capture,undefined);
+});

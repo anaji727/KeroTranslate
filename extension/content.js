@@ -26,13 +26,25 @@
       }
     }else if(window===window.top){
       const player=livePlayer();
-      if(player&&(!captions||captionHost?.parentElement!==player)){captions?.dispose();captions=null;captionHost=null;const host=document.createElement('div');host.id='kero-caption-overlay';const view=mountCaptions(host,config);player.append(host);captionHost=host;captions=view;}
+      if(player&&(!captions||!captionHost?.isConnected||captionHost?.parentElement!==player)){captions?.dispose();captions=null;captionHost=null;const host=document.createElement('div');host.id='kero-caption-overlay';const view=mountCaptions(host,config);player.append(host);captionHost=host;captions=view;}
     }
   }
   function mount(){if(!mounting)mounting=initialize().finally(()=>{mounting=null;});return mounting;}
+  async function prepareOverlay(test){
+    const url=location.href;let failed=false;
+    // Retry a mount invalidated by navigation/STOPPED; also allow the player to attach.
+    for(let attempt=0;attempt<4;attempt++){
+      try{await mount();failed=false;}catch{failed=true;}
+      if(url!==location.href)return {ok:false,live:false,overlayReady:false};
+      const live=!!livePlayer(),overlayReady=live&&!!captions&&!!captionHost?.isConnected;
+      if(overlayReady){if(test)captions.show({original:'字幕の表示テストです',translation:'Caption overlay is working.'});return {ok:true,live,overlayReady};}
+      if(attempt<3)await new Promise(resolve=>setTimeout(resolve,150));
+    }
+    return {ok:false,live:!!livePlayer(),overlayReady:false,error:failed?'Caption overlay could not initialize. If the extension was just updated, reload YouTube once, then use Start captions in the toolbar popup.':'Caption overlay is not ready yet. Wait for the video to load and try Start captions again.'};
+  }
   chrome.runtime.onMessage.addListener((message,_sender,respond)=>{
     if(message.type==='CHECK_LIVE'||message.type==='TEST_OVERLAY'){
-      mount().then(()=>{const live=!!livePlayer(),overlayReady=!!captions&&!!captionHost?.isConnected;if(message.type==='TEST_OVERLAY'&&overlayReady)captions.show({original:'字幕の表示テストです',translation:'Caption overlay is working.'});respond({ok:live&&overlayReady,live,overlayReady});},()=>respond({ok:false,live:!!livePlayer(),overlayReady:false,error:'Caption overlay could not initialize. Reload this YouTube page.'}));return true;
+      prepareOverlay(message.type==='TEST_OVERLAY').then(respond);return true;
     }
     if(message.type==='CAPTION'){const version=generation;mount().then(()=>{if(version===generation)captions?.show(message.cue);}).catch(()=>{});}
     if(message.type==='CAPTURE_STATUS'&&['STOPPED','ERROR','STARTING'].includes(message.status)){generation++;captions?.clear();}
