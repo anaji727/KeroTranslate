@@ -8,7 +8,7 @@ Follow a stream with original and translated captions. Draft a comment, translat
 
 **INSERT only fills the chat input. It never sends a message. You review and post it yourself.**
 
-Current version: **Beta 0.1.13** (October 9, 2026).
+Current version: **Beta 0.1.14** (October 9, 2026).
 
 ## Install the beta
 
@@ -97,6 +97,8 @@ The initial **Composer original language** setting is **English → Japanese**. 
 
 If YouTube already has a draft, choose **Replace draft** or **Keep draft**. Repeated insertion does not duplicate identical text. The insertion limit is 200 JavaScript string units, a conservative limit that may differ from YouTube's counting of emoji. Translation waits during Japanese IME composition, and stale responses cannot replace newer input.
 
+A full-width animated green bar below the panel header indicates comment translation or back-translation, including time spent waiting in the shared queue. It remains visible while minimized and disappears on completion, cancellation or failure. It indicates activity, not completion percentage. Reduced-motion preferences replace the animation with a static striped indicator.
+
 ## Quick timing controls
 
 The header's **−** button minimizes the panel; **+** restores it. Drafts, translations and active captions continue while minimized. This view preference lasts until the panel is remounted or the page is reloaded.
@@ -179,6 +181,8 @@ node tools/check.js
 English is the primary documentation language. Each document links to a corresponding `.jp.md` Japanese version. Historical notes describe their original releases; use this README for current installation instructions.
 
 ## Changelog
+
+- **Beta 0.1.14:** Add a full-width indeterminate activity bar for comment translation and back-translation, visible while minimized and with reduced-motion support.
 
 - **Beta 0.1.13:** Fix browser timer invocation causing `Illegal invocation` and stalled translation queues. Keep comment translation and back-translation together; add permanent Retry all, caption failure backoff, minimum one-second error visibility, panel minimization and live Request gap / Caption hold controls. Preserve drafts, saved settings and provider cooldowns.
 
