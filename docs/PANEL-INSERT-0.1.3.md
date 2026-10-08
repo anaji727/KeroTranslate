@@ -1,5 +1,9 @@
 # INSERT and panel controls — 0.1.3
 
+[日本語](PANEL-INSERT-0.1.3.jp.md) · [Current README](../README.md)
+
+> Historical release note. The startup flow changed in 0.1.7: start directly from the toolbar popup on a new tab. Follow the current README for installation.
+
 The user's current YouTube live chat DOM has a visible DIV#input with contenteditable="" inside yt-live-chat-message-input-renderer. The previous selector required contenteditable="true", so it incorrectly reported that the input was unavailable. The adapter now accepts empty, true and plaintext-only values. Hidden, disabled, noneditable and ambiguous inputs remain rejected; existing drafts still require replacement confirmation. INSERT never sends.
 
 Start captions and Stop now appear at the top of the main KeroTranslate chat panel, with capture status and errors. The popup retains settings and Test overlay and points to the main panel for capture controls. Requests use the sender's tab ID; a panel cannot choose another tab or stop its capture. Keys are not exposed to the panel.

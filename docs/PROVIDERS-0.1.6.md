@@ -1,50 +1,52 @@
-# KeroTranslate 0.1.6 — Provider追加
+# KeroTranslate 0.1.6 — additional providers
 
-2026-10-07。公式仕様を確認して実装し、通信を模擬したテストで検証。実アカウントへの接続、料金、品質、実配信での遅延は未検証です。
+[日本語](PROVIDERS-0.1.6.jp.md) · [Current README](../README.md)
 
-## 実装した経路
+Historical integration note dated October 7, 2026. The implementation was based on provider documentation and tested with simulated traffic. Live account connections, billing, quality and stream latency were not verified. Endpoint and model names below describe the code, not a guarantee of current account access.
 
-| 選択 | 接続先 | 動作 |
+## Implemented routes
+
+| Selection | Endpoint | Behavior |
 |---|---|---|
-| OpenAI翻訳 | `https://api.openai.com/v1/responses` | `gpt-4.1-mini`初期値、モデル変更可、`store:false`。完了したassistantテキストのみ採用 |
-| OpenAI STT | `https://api.openai.com/v1/realtime/calls` + WebRTC | `gpt-live-transcribe`、transcription専用セッション。deltaをpartial、completedをfinalへ変換 |
-| DeepL翻訳 | `https://api-free.deepl.com/v2/translate` または `https://api.deepl.com/v2/translate` | Free/Proを明示選択。字幕は言語自動検出、コメントは指定方向 |
-| DeepL STT | `https://api.deepl.com/v3/voice/realtime` + `wss://api.deepl.com/v3/voice/realtime/connect` | ソース文字起こしのみ要求。mono WebM/Opus、200ms単位で送信。tentative/concludedを表示へ変換 |
-| DeepSeek翻訳 | `https://api.deepseek.com/chat/completions` | `deepseek-flash`初期値、モデル変更可、Thinking無効。正常完了contentのみ採用 |
+| OpenAI translation | `https://api.openai.com/v1/responses` | Configurable model, default `gpt-4.1-mini`; `store:false`; accept completed assistant text only |
+| OpenAI STT | `https://api.openai.com/v1/realtime/calls` + WebRTC | `gpt-live-transcribe`, transcription-only session; deltas become partials and completed events become finals |
+| DeepL translation | `https://api-free.deepl.com/v2/translate` or `https://api.deepl.com/v2/translate` | Explicit Free/Pro selection; autodetect caption language, use explicit direction for comments |
+| DeepL STT | `https://api.deepl.com/v3/voice/realtime` + `wss://api.deepl.com/v3/voice/realtime/connect` | Request source transcription only; mono WebM/Opus in 200 ms chunks; map tentative/concluded text to display events |
+| DeepSeek translation | `https://api.deepseek.com/chat/completions` | Configurable model, default `deepseek-flash`; Thinking disabled; accept normally completed content only |
 
-音声認識・翻訳は別々の選択です。同じ会社を両方に選んでも、音声認識確定後にテキスト翻訳を別リクエストします。別会社を選ぶ場合は認識原文が翻訳先にも送られます。DeepSeekのSTT経路は実装していません。
+STT and translation are separate selections. Even with the same company selected for both, finalized recognition text is translated in a separate request. With different providers, the recognized source text also goes to the translation provider. No DeepSeek STT route is implemented.
 
-## 音声の区切りと順序
+## Segmentation and ordering
 
-OpenAIのliveモデルはserver VADを受け付けないため、Web Audioの音量から拡張側で区切りを判定します。約600msの静音、継続音は約8秒でcommit。発話を検出しない10秒間はバッファをclearします。これは声とBGMを分類するVADではなく、音楽や小声で誤判定し得る実験的な値です。partialはcommitを待たずに表示し、翻訳はfinalの後だけ要求します。
+The implemented OpenAI live-model configuration uses local Web Audio amplitude-based endpointing rather than server VAD. Commit after about 600 ms of quiet, or eight seconds of continuous sound. Clear the buffer after ten seconds without detected speech. These experimental thresholds do not distinguish speech from background music and can misclassify music or quiet speech. Partials appear before commit; translation is requested only after finalization.
 
-OpenAIのitem IDごとに順序を保持し、古いfinalが後着しても新しい字幕の翻訳待ちを巻き戻しません。DeepLは確定部分をまとめて1区間とし、新しいtentativeを次区間として表示します。DeepLの確定単位は文末と一致しないことがあり、文結合は今後の改善対象です。
+Order is tracked by OpenAI item ID so a late old final does not rewind the newest pending caption. For DeepL, combine concluded text into one segment and display new tentative text as the next segment. Its finalization boundary may not be a sentence boundary; sentence merging remains future work.
 
-## キー・通信・停止
+## Keys, connections and Stop
 
-個人が自分のAPIキーを設定するBYOK拡張です。共用のアプリキーを埋め込んで配布する設計ではありません。長期キーはtrusted extension context内だけで取り扱い、YouTubeのDOMやcontent scriptへ渡しません。OpenAIのWebRTC初期化はoffscreenから直接認証し、アプリ側の仲介サーバーは用意していません。
+This is a personal bring-your-own-key extension, not a distribution containing a shared application key. Long-lived keys stay in trusted extension contexts and are never passed to YouTube's DOM or content scripts. OpenAI WebRTC initialization authenticates directly from the offscreen document; there is no application relay server.
 
-DeepL Voiceだけは公式方式に従い短期接続トークンをWebSocket URLに付けます。受信した接続先のoriginとpathを固定の許可先と照合し、URLやトークンをUI・指標へ出しません。長期APIキーはHTTPヘッダーです。
+DeepL Voice uses a short-lived connection token in its WebSocket URL, following the integration design. Validate the returned endpoint's origin and path against a fixed allowlist. Do not expose that URL or token in UI or metrics. Long-lived API keys use HTTP headers.
 
-拡張のhost permissionsとCSPには使用する公式ホストだけを追加しました。DeepLの通常Webページ向けCORS制限と、拡張のtrusted contextからの接続は実機で確認が必要です。非公式プロキシへの転送はありません。
+Host permissions and CSP include only the official hosts used by the adapters. DeepL connections from trusted extension contexts still require real-browser validation; ordinary webpage CORS restrictions are a separate concern. No unofficial proxy is used.
 
-Stop・設定変更・キー削除で認識接続と音声処理を終了し、接続初期化のHTTPも中断します。途中で返った応答から新しい接続を作りません。接続失敗は手動再試行とし、別の課金Providerへ自動で切り替えません。すでに送った処理の料金までは取り消せません。
+Stop, settings changes and key deletion end recognition and audio processing and abort initialization HTTP calls. Late responses must not open new connections. Connection failures require manual restart; the extension never automatically switches to another billable provider. Already-sent work can still be charged.
 
-## 検証
+## Validation
 
-76件のオフラインテスト。新規分ではリクエスト先・認証・応答解析・未完了出力の拒否、DeepL Free/Pro、文字数とトークンの分離、キャンセル、STTのpartial/final・順序・Stop競合・送信待ち上限・接続先検証・全キーの秘密境界を確認しています。構文検査・配布物生成も実施しています。
+At 0.1.6, 76 offline tests passed. New coverage included endpoints, authentication, response parsing, rejecting incomplete output, DeepL Free/Pro routing, separating billed characters from tokens, cancellation, STT partial/final ordering, Stop races, backpressure, endpoint validation and key isolation. Syntax and distribution generation were also checked.
 
-実機では以下を順に確認してください。
+For live validation:
 
-1. 拡張とYouTubeを再読み込みし、設定で対応キーを再入力。追加の公式接続先権限が有効なことを確認。
-2. 各翻訳Providerで短文を日→英、英→日へ変換し、MTL編集後のre-MTLも確認。DeepLはキーに合うFree/Proを選ぶ。
-3. STTは最初Original onlyで10秒程度から試し、partial、final、配信音声の継続再生、Stop後の取得終了を確認。
-4. 翻訳を組み合わせ、前の訳文と新しいpartialの共存を確認。OpenAIでは無音・連続音・BGM・小声で区切りを確認。
-5. 接続中・翻訳中のStop、設定保存、キー削除、タブ移動、回線切断を確認。Providerの管理画面で利用量を照合。
+1. Reload the extension and YouTube; re-enter the required keys. Check that the added host permissions are active.
+2. Test a short sentence in each translation direction and re-MTL after editing MTL. For DeepL, match the Free/Pro plan to the key.
+3. Start STT in Original only mode for about ten seconds. Check partials, finals, continued audible playback and capture termination after Stop.
+4. Add translation and check the previous translated caption alongside newer partials. For OpenAI, test silence, continuous sound, music and quiet speech.
+5. Test Stop, saving settings, deleting keys, navigation and network loss while connecting or translating. Compare usage against provider dashboards.
 
-OpenAIのWebRTC送信バイト数とSTTトークンは現在の指標では計測しません。DeepL翻訳は`billedCharacters`、他社翻訳は返却されたtokensを集計します。これらは途中集計であり請求メーターではありません。
+Current metrics do not count OpenAI WebRTC bytes or STT tokens. DeepL translation reports `billedCharacters`; other translation adapters aggregate returned token usage. These are partial session aggregates, not billing meters.
 
-## 参照した公式資料
+## Official references used for the integration
 
 - [OpenAI text generation](https://developers.openai.com/api/docs/guides/text)
 - [OpenAI Realtime transcription](https://developers.openai.com/api/docs/guides/realtime-transcription)

@@ -1,132 +1,132 @@
-# KeroTranslate 設計と実装計画
+# KeroTranslate design and implementation plan
 
-2026-10-06 JST / 初版。2026-10-07に名称・字幕仕様・テスト数を更新。添付の依頼文・仕様書を参考資料として扱い、今回の「これ組む」に対して設計＋ローカルPoCソースを作成した。資料内の過去合意と今回の採用案は区別する。
+[日本語の原文](DESIGN.jp.md) · [Current README](../README.md)
 
-> 0.1.6追記: OpenAI STT・翻訳、DeepL Voice STT・翻訳、DeepSeek翻訳を追加済み。以下の初版Provider比較は設計時の記録です。現在の方式・制約は[Provider追加ノート](PROVIDERS-0.1.6.md)を参照してください。新しいSTTの接続待ちは20秒です。
+Original design: October 6, 2026 JST; name/caption/test updates on October 7. English edition with current architecture notes: October 8. The supplied design request and specification were reference material. Earlier agreements, proposals and implementation decisions are distinguished below.
 
-## 1. 範囲と今回の判断
+**Current beta changes:** OpenAI, DeepL and DeepSeek adapters were added in 0.1.6; all translation HTTP now goes through the worker queue added in 0.1.8. Beta 0.1.10 removes Demo providers and preview distribution. Use the [provider notes](PROVIDERS-0.1.6.md) and README for current behavior; historical comparisons below are not claims that an adapter is still missing.
 
-引継ぎ仕様は、YouTube Live、EN↔JA、BYOK、音声字幕、自分のコメント翻訳、手動投稿、STT/翻訳分離。OBS、Hosted、全コメント翻訳、共有辞書、課金、学習基盤は実装していない。
+## 1. Scope and adopted decisions
 
-今回の可逆的な採用案：
+The handoff scope is YouTube Live, EN↔JA, BYOK, audio captions, translating the user's own comments, manual posting and separate STT/translation providers. OBS, hosted services, translating everyone's comments, shared dictionaries, billing and training infrastructure are not implemented.
 
-| 判断 | 初版で採用した案 | 理由・見直し条件 |
+| Decision | Adopted approach | Reason / reconsideration |
 |---|---|---|
-| UI名 | KeroTranslate | 2026-10-07に正式表記をKeroTranslateへ統一 |
-| 言語・UI | JavaScript ES Modules / Shadow DOM / CSS | 外部依存・ビルド工程なしでMV3を読み込める。型とSDKが増えた段階でTypeScript化 |
-| 初期翻訳 | Gemini / モデルID編集可能 | RESTの小さなAdapterで構成。品質優位を断定しない |
-| 初期STT | Deepgram Nova-3 | 公式がstreamingと日英を含むmultiを記載。実配信の品質は別評価 |
-| MTL | 直接編集可 | 編集版からre-MTLのみ再生成 |
-| MTL INSERT | READYまで待つ | 最新のre-MTLまで確認可能にする。速度比較後に変更可能 |
-| 既存下書き | 空なら挿入、既存なら置換/維持 | 確認中に純正側が変わった場合も再確認。追記は初版に入れない |
-| 言語 | ComposerはJA→EN/EN→JA。字幕は固定出力言語 | 日英混在STTは実験的。言語ごとに出力先を自動反転しない |
-| キー | セッション保存のみ | 永続保存のリスクと追加UIを初版で避ける |
-| 字幕 | 初期BC、原文＋訳文、各最大2行、翻訳後10秒（変更可） | 75〜200%のサイズ設定。新しい認識中テキストは別行に表示 |
-| 対象画面 | 通常視聴を基準 | 全画面・シアター・ポップアウトは検証後に対応表を更新 |
-| ローカル辞書 | 後続 | 初期精度測定で必要な固有名詞を特定してから |
+| Product name | KeroTranslate | Standardized October 7, 2026 |
+| Language/UI | JavaScript ES modules, Shadow DOM, CSS | Load MV3 without external runtime dependencies or a build step; reconsider TypeScript as types/SDKs grow |
+| Initial translation adapter | Gemini, configurable model ID | Small REST adapter; no claim of superior quality |
+| Initial speech adapter | Deepgram Nova-3 | Streaming/multilingual design; real-stream quality needs separate evaluation |
+| MTL editing | Allowed | Regenerate only re-MTL from edited translation |
+| MTL INSERT | Wait until READY | Let the user check current back-translation; revisit after measuring speed |
+| Existing draft | Insert if empty; otherwise replace/keep | Reconfirm if native input changes during confirmation; no append mode initially |
+| Languages | EN→JA or JA→EN composer; fixed caption output | Mixed STT is experimental; no automatic reversal of caption target per segment |
+| Keys | Session-only | Avoid persistent-key risk and additional initial UI |
+| Captions | Bottom-center, original + translation, maximum two lines each, ten seconds after translation | Configurable 75–200% size; newer provisional text has a separate row |
+| Target layout | Normal watch page | Update fullscreen/theater/pop-out support after testing |
+| Local dictionary | Deferred | Identify needed names through initial accuracy evaluation |
 
-debounce 650ms、HTTP timeout 20秒、STT接続timeout 12秒、無認識表示15秒、音声チャンク250msは今回の仮値であり、過去合意・性能保証ではない。停止・失敗後の再開始は手動。
+Implementation defaults, not prior agreements or performance guarantees: 650 ms debounce, 20-second translation HTTP timeout, 12-second Deepgram connection timeout, 20 seconds for the added STT adapters, NO_SPEECH after 15 seconds without recognition, 250 ms Deepgram audio chunks. Restart after Stop/failure is manual.
 
 ## 2. UI
 
-通常視聴では動画プレーヤー内に字幕を重ねる。表示はOriginal only / MTL only / Original + MTL、設定画面の9マスでアンカー選択。Original onlyでは字幕用の翻訳APIを呼ばない。
+Captions overlay the video player. Original only / MTL only / Original + MTL and a nine-anchor position selector are available. Original only makes no caption translation API calls.
 
-チャットのnative message input直前に独立したComposerを追加する。純正チャットや入力欄そのものを置き換えない。Composer上限55vh、狭い領域はスクロール。資料の約2/3＋1/3を固定比率では強制しない。現行YouTubeでレイアウトが成立するかは未検証。
+Add an independent composer before the native live-chat input; do not replace the chat or input. The panel is capped at 55vh and scrolls in constrained space. The approximate two-thirds chat/one-third composer proposal is not a fixed ratio requirement. Current YouTube layout still needs visual validation.
 
-Originalは編集可能、MTLは最新訳がある間に編集可能、re-MTLは読み取り専用。状態とProviderをヘッダーに表示。再翻訳失敗時も原文を保持し、再翻訳工程だけ再試行。入力確認と実際のINSERT失敗を分けて表示する。挿入先判定はクリック時に行い、ログアウト・チャット無効・DOM不明時は理由を表示して中止する。
+Original is editable, current MTL can be edited, and re-MTL is read-only. Show state/provider compactly. Preserve Original after re-MTL failure and retry that stage alone. Distinguish draft checks from actual insertion failures. Determine the target when INSERT is clicked; explain and stop when signed out, chat is disabled or the DOM is unrecognized.
 
-開始停止は拡張ツールバーのポップアップ。キーは拡張専用設定ページだけで扱う。Composerの⚙から設定を開ける。IncomingとComposerの翻訳は独立しており、字幕のStopはComposerの編集機能を止めない。
+Capture starts/stops in the toolbar popup and main panel. The toolbar popup is the recommended first-start route on a new tab. Only the extension's settings page handles keys; the panel gear opens it. Stopping captions does not stop composer editing.
 
-## 3. 実行環境と権限
+## 3. Execution contexts and permissions
 
 ```mermaid
 flowchart LR
-  P[Popup: user start] --> W[MV3 Service Worker]
-  S[Extension Settings] --> W
-  W --> O[Offscreen: tab audio + playback]
-  O --> STT[STT Adapter]
-  STT --> T[Translation Adapter]
-  T --> W
-  W --> V[watch frame: captions]
-  C[live_chat frame: Composer] --> W
-  W --> G[Gemini Translation Adapter]
-  G --> W
-  W --> C
-  C --> Y[YouTube Adapter: insertText only]
+  P[Toolbar popup / Settings] --> W[MV3 worker: keys and sessions]
+  W --> O[Offscreen: tab audio and playback]
+  O --> S[STT adapter]
+  S --> O
+  O --> Q[Worker translation queue]
+  C[Live chat frame: composer] --> Q
+  Q --> T[Translation provider]
+  T --> Q
+  Q --> O
+  Q --> C
+  O --> W
+  W --> V[Watch frame: captions]
+  C --> Y[YouTube adapter: insert only]
 ```
 
-- Content scriptはisolated world。YouTube DOMを触る箇所はyoutube.jsへ集約。MAIN worldへのスクリプト挿入、window.postMessage、外部メッセージ受信設定は使わない。
-- watchのトップフレームに字幕、live_chatのフレーム内にComposerを配置する。親フレームからiframe内部を書き換える構成にしない。
-- Workerはキー、設定、capture session、タブ/フレーム別のComposerリクエストを管理。1フレーム1件、1拡張1音声セッション。
-- Offscreenは音声・WebSocket・MediaRecorderを所有する。Chrome拡張APIはruntimeだけを利用し、storage等はWorker経由にする。[offscreen公式](https://developer.chrome.com/docs/extensions/reference/api/offscreen)
-- ユーザーが開始したタブのstream IDをWorkerが取得し、offscreenで消費。AudioContextのdestinationへ接続して視聴音を継続する。Chrome 116以降の公式パターンに基づく。[音声取得](https://developer.chrome.com/docs/extensions/how-to/web-platform/screen-capture)
-- 権限はstorage / activeTab / tabCapture / offscreen。YouTubeのhost権限はホームからwatchへのSPA遷移とlive_chat frameへの常駐接続に使う。API hostはGoogleとDeepgramだけ。マイク・全サイト権限・remote script・第三者分析SDKはない。
-- API fetchは拡張側で行う。通常ページのCORS制約と拡張host permissionの挙動は同一ではない。[Chromeのcross-origin要求](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests)
+- Content scripts run in the isolated world. YouTube DOM handling lives in `youtube.js`. No MAIN-world injection, `window.postMessage` bridge or externally connectable messaging is used.
+- Put captions in the top watch frame and the composer inside the live-chat frame, not by editing an iframe from its parent.
+- The worker manages keys, settings, capture sessions and per-tab/frame composer requests. One pending composer request per frame; one audio session per extension.
+- Offscreen owns audio, WebSocket and MediaRecorder resources. Of Chrome extension APIs, it uses runtime messaging; storage is accessed through the worker. [Offscreen API](https://developer.chrome.com/docs/extensions/reference/api/offscreen).
+- The worker obtains the stream ID for the user-invoked tab; offscreen consumes it and connects audio to AudioContext's destination so playback continues. The design follows Chrome 116+ capture patterns. [Audio capture](https://developer.chrome.com/docs/extensions/how-to/web-platform/screen-capture).
+- Permissions are storage, activeTab, tabCapture and offscreen. YouTube host access supports SPA navigation and the chat frame. Provider hosts are explicitly listed for Gemini, Deepgram, OpenAI, DeepL and DeepSeek. No microphone/all-sites permission, remote script or analytics SDK is requested.
+- API calls run in extension contexts. Ordinary-page CORS behavior is not identical to extension host permissions. [Cross-origin requests](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests).
 
-キーはlocal/syncへ保存しない。storage.local（非秘密設定）とstorage.session（キー等）はTRUSTED_CONTEXTSに制限する。content scriptへはsanitized設定だけを返す。APIレスポンス本文や生の認証例外は通常UIへ出さない。closed Shadow DOMはスタイル分離の補助であり、キーを守る境界として頼らない。
+Keys are not stored in local/sync. Non-secret local settings and session credentials are restricted to TRUSTED_CONTEXTS. Content scripts receive sanitized settings only. Raw API bodies and authentication exceptions are not normal UI output. Closed Shadow DOM provides style isolation, not the secret boundary.
 
-## 4. 版管理・キャンセル・停止
+## 4. Revisions, cancellation and Stop
 
-ComposerはrevisionとAbortControllerを持つ。原文・方向・設定変更でrevisionを進めて既存処理を中断する。非同期応答はrevisionが一致するときだけ反映する。MTL編集では同様に更新し、編集後のMTLを再翻訳元にする。旧訳からREADYを復元できない。
+Composer uses a revision counter and AbortController. Original, direction or settings changes invalidate work; async output applies only to its matching revision. Editing MTL creates a new revision and back-translates the edit. An old translation cannot restore READY.
 
-`EMPTY → STALE → TRANSLATING → BACK_TRANSLATING → READY`。MTL編集は`EDITING_MTL → BACK_TRANSLATING`。失敗は`ERROR`で原文保持。IME composition中は送信しない。Original INSERTは非空なら可能、MTLはREADYのみ。2工程の対応が取れない結果は挿入させない。
+`EMPTY → STALE → TRANSLATING → BACK_TRANSLATING → READY`; manual edits use `EDITING_MTL → BACK_TRANSLATING`. Errors preserve Original in ERROR. No requests during IME composition. Original INSERT requires text; MTL INSERT requires READY and matching translation/back-translation.
 
-字幕はcapture session ID＋Deepgram segment start IDで対応付ける。interimは原文だけ、finalで翻訳。partialは薄色＋「…」、finalは通常色。前の翻訳と新しい認識結果を併存させる。進行中の翻訳は完了させ、待機中は最新1区間だけを保持する。**初版は全発話の逐次表示を保証しない**。高密度な会話では字幕を飛ばす可能性があり、キュー/確定発話の束ね方を実測で検討する。
+Caption events use a capture session ID and provider segment IDs/sequences. Partials show dim source text with an ellipsis, finals show normal text and trigger translation. Preserve the previous translation beside newer recognition. Finish the active translation and retain only the newest waiting segment. This does not guarantee every utterance; dense conversation can skip segments. Evaluate batching/queue strategy with real streams.
 
-停止はcapture IDを無効化してからoffscreenへ通知し、Recorder、WebSocket、MediaStream全track、AudioContext、タイマー、字幕翻訳を停止する。開始途中のgetUserMediaが停止後に返った場合もtrackを止める。Workerのcaptureイベントと開始停止を直列化し、遅れたイベントでsessionが復活しないようにする。
+Stop invalidates the session before notifying offscreen, then stops recorder, sockets, tracks, AudioContext, timers and pending caption requests. Tracks returned by late getUserMedia calls are also stopped. Serialize worker capture events/start/stop so late events cannot revive sessions.
 
-トップページ遷移・タブ終了は録音停止。frame再読み込み・遷移はそのComposerを破棄し未完了要求を中断。SPA再接続は限定したMutationObserverとURLチェック。再接続に失敗した場合は自動再録音しない。
+Top-frame navigation and tab closure stop recording. Frame reload/navigation disposes its composer and cancels requests. Limited MutationObservers and URL checks handle SPA reconnection; failures do not silently restart recording.
 
-HTTP 401/403、404、429、5xx、timeout、network、空/不完全応答を区別。429はquotaとrate-limitを断定しない。WebSocketのブラウザーエラーはHTTP認証詳細を取得できないため、認証・quota・networkを断定せずProvider管理画面への確認を促す。NO_SPEECHは無認識であり、完全な無音測定ではない。
+Differentiate 401/403, 404, rate/quota errors, 5xx, timeout, network and empty/incomplete responses. Do not infer whether 429 specifically means quota or rate limiting. Browser WebSocket errors do not expose enough HTTP detail to distinguish bad credentials, quotas and network failure; direct users to provider usage. NO_SPEECH means no recognition, not measured silence.
 
-## 5. Providerの実現性と比較順
+## 5. Historical provider comparison
 
-確認日2026-10-06。以下はAPI公式仕様確認と設計判断。実接続に成功したという意味ではない。
+The following records the October 6 design review, not successful live connections or current support status.
 
-| 順 | 候補 | 今回の扱い・確認内容 |
+| Order | Candidate | Original decision / evaluation |
 |---|---|---|
-| 1 | Gemini / 翻訳 | REST generateContent実装。system instructionとuser textを分離。モデルIDは設定可能、初期gemini-3.5-flash-lite。実キー検証待ち。[API](https://ai.google.dev/api/generate-content)・[モデル一覧](https://ai.google.dev/gemini-api/docs/models) |
-| 1 | Deepgram / STT | Nova-3 multiは公式上日英を含む。ブラウザーWSのtoken subprotocol認証を実装。実キー・混在配信検証待ち。[言語](https://developers.deepgram.com/docs/models-languages-overview)・[接続](https://developers.deepgram.com/docs/using-the-sec-websocket-protocol) |
-| 2 | Azure Speech / STT | 公式はJS SDKのcontinuous language identificationを記載。候補言語制約、音声フォーマットとSDKの同梱サイズを次に比較。未実装。[公式](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-identification) |
-| 3 | Groq Whisper / STT | 音声ファイルAPIを確認。録音チャンクの独立デコード、重複・分割点、最低請求単位を検証して比較。現streaming構成と同条件ではない。未実装。[公式](https://console.groq.com/docs/speech-to-text) |
-| 3 | DeepL / 翻訳 | 公式は通常ブラウザーからの直呼びを非対応としている。拡張Worker＋host permissionでの実接続と利用条件を別途検証してから採否判断。Hosted proxyを初版へ追加しない。未実装。[公式](https://developers.deepl.com/docs/best-practices/cors-requests) |
-| 4 | OpenAI / STT・翻訳 | 候補として維持。今回の接続方式・料金調査と実装は未着手。着手時にRealtime/音声API/翻訳APIの公式仕様を確認し、同じ素材で比較 |
-| 5 | Local Whisper / faster-whisper | ローカル補助プロセスを別構成として評価予定。ブラウザー内完結と仮定しない。通信認証・配布・GPU/CPU条件の検証は未着手 |
+| 1 | Gemini translation | Implement REST generateContent, separate system instruction/user text, configurable model initially `gemini-3.5-flash-lite`; real-key validation pending. [API](https://ai.google.dev/api/generate-content), [models](https://ai.google.dev/gemini-api/docs/models) |
+| 1 | Deepgram STT | Nova-3 multi and token-subprotocol browser WebSocket authentication; mixed-stream/key validation pending. [Languages](https://developers.deepgram.com/docs/models-languages-overview), [connection](https://developers.deepgram.com/docs/using-the-sec-websocket-protocol) |
+| 2 | Azure Speech STT | Compare continuous language identification, candidate-language restrictions, audio formats and SDK size; not implemented. [Reference](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-identification) |
+| 3 | Groq Whisper STT | File-based API; evaluate independently decodable chunks, overlaps/boundaries and minimum billing units; not equivalent to streaming, not implemented. [Reference](https://console.groq.com/docs/speech-to-text) |
+| 3 | DeepL translation | At design time, extension-worker connectivity and terms required evaluation separately from ordinary browser CORS; no hosted proxy planned. Added later in 0.1.6. [CORS](https://developers.deepl.com/docs/best-practices/cors-requests) |
+| 4 | OpenAI STT/translation | Initially a candidate awaiting API/billing study; adapters added in 0.1.6 |
+| 5 | Local Whisper / faster-whisper | Evaluate as a separate local-helper architecture; do not assume browser-only execution. Authentication/distribution/GPU/CPU evaluation pending |
 
-実装の分離境界は `createSttProvider(...).start(media)/stop()` と `translate({text,source,target,signal},settings,keys)`。現在それぞれDemo＋1実Providerであり、実Provider同士の切替検証は未完了。STTと翻訳は独立に選べる。re-MTLは初版ではMTLと同じProvider、同じモデルを使う。
+Adapter boundaries are `createSttProvider(...).start(media)/stop()` and `translate({text,source,target,signal},settings,keys)`. The initial code had one real adapter plus Demo for each role. The beta now has three STT/four translation adapters and no Demo. STT/translation are independent; MTL/re-MTL share provider/model.
 
-### 費用と無料枠
+### Historical cost notes
 
-- Gemini 3.5 Flash-Lite Standardは確認時の公式表で入力$0.30/100万tokens、出力（thinking含む）$2.50/100万tokens。Free Tier欄は無料だが、利用可能枠・地域・アカウント上限の保証ではない。無料/有料でデータ改善利用の扱いも異なる。[料金表](https://ai.google.dev/gemini-api/docs/pricing)
-- DeepgramのNova-3 Multilingual streaming Pay As You Goは確認時の表示価格$0.0058/分、通常価格欄$0.0092/分。プロモーション、アカウント条件、opt-out等で実請求が異なる可能性があるので、製品内の保証額には使わない。[料金表](https://deepgram.com/pricing)
-- 本実装はDeepgramへ `mip_opt_out=true` を送る。学習除外フラグの有効性はProvider usage logsで確認する。[データの扱い](https://developers.deepgram.com/trust-security/your-data)
-- 60分×表示単価$0.0058=$0.348はSTTだけの参考計算。翻訳/再翻訳・条件差を含む総額ではない。実請求は各Provider管理画面と照合する。
-- Kero Free/Paidの価格、時間制限、決済、配布時の料金設計は未決のまま。API価格から勝手に製品価格を決めない。
+These are dated design notes, not current prices or product promises; check provider dashboards and official pricing before use.
 
-## 6. 未決事項と残す接続点
+- The recorded Gemini 3.5 Flash-Lite Standard table showed $0.30/million input tokens and $2.50/million output tokens including thinking. A free-tier column did not guarantee account/region allowance; data-use terms also differed. [Pricing](https://ai.google.dev/gemini-api/docs/pricing).
+- Recorded Deepgram Nova-3 multilingual streaming PAYG pricing showed $0.0058/minute and a $0.0092/minute regular-price column. Promotions, account terms and opt-out could change actual billing. [Pricing](https://deepgram.com/pricing).
+- The adapter sends `mip_opt_out=true`; verify handling in provider usage logs. [Data handling](https://developers.deepgram.com/trust-security/your-data).
+- The illustrative calculation 60 × $0.0058 = $0.348 covered STT only, excluding translation/back-translation and account differences.
+- Product Free/Paid pricing, time allowances and billing remain undecided; do not derive product prices automatically from API prices.
 
-re-MTL前のINSERT許可、MTL/re-MTLの別Provider選択、全画面等の正式対応範囲、永続キー保存、配布範囲と料金は今後決定する。初版を触ってから変更できるものは表1の仮案で進めた。
+## 6. Open decisions and future extension points
 
-ローカル辞書の初案は `{version:1, entries:[{source:"...",target:"...",from:"ja",to:"en",mode:"preserve|translate"}]}`。regex・公開共有・自動選択は後続。Providerによってprompt/context/glossary適用方法が異なるため、共通の文字列置換で品質保証しない。現在コードには未実装。
+Potential future decisions include allowing INSERT before re-MTL, separate MTL/re-MTL providers, supported display modes, persistent key storage and distribution/pricing. Current reversible choices can be revisited after hands-on evaluation.
 
-未来の出力先は字幕のcueイベントに接続できる。OBS/Hostedのサーバーや権限を事前に持ち込まない。
+A possible local dictionary format is `{version:1, entries:[{source:"...",target:"...",from:"ja",to:"en",mode:"preserve|translate"}]}`. Regex, public sharing and automatic selection are deferred. Providers differ in prompt/context/glossary support; common string replacement does not guarantee quality. No dictionary is implemented yet.
 
-YouTube利用条件は確認したが、音声の外部処理やDOM挿入の適合性を「INSERTのみだから問題ない」と結論していない。公開前に対象用途・データ処理・Store申告とともに別途検討する。[YouTube利用条件](https://www.youtube.com/static?template=terms)
+Future outputs can subscribe to caption cues; do not prebuild OBS/Hosted servers or permissions. The original review did not conclude that external audio processing or DOM insertion complies with YouTube's terms merely because INSERT does not send. Review intended use, data handling and store declarations for distribution. [YouTube terms](https://www.youtube.com/static?template=terms).
 
-## 7. 実装段階・合格条件
+## 7. Original implementation stages
 
-| 段階 | 今回の到達点 | 次の合格条件 |
+| Stage | Original progress | Next acceptance condition |
 |---|---|---|
-| P0 設計 | 本書、構成・状態・仮決定を作成 | UIを見て大きな導線を評価 |
-| P1 状態/UI | 実装。58テストと構文検査通過 | ブラウザー目視・キーボード・小画面確認 |
-| P2 YouTube接続 | Adapter、frame接続、INSERT実装 | A02/A03/A12/A13の実機確認。送信ゼロ、Emote保持 |
-| P3 BYOK | Gemini/Deepgram Adapter、キー境界実装 | 実キー認証、STT中の音声、遷移停止、Provider請求照合 |
-| P4 実配信評価 | 手順のみ | 日英混在・歌/BGM・笑い・短文・固有名詞で遅延/品質/費用測定 |
-| P5 α配布 | 未着手 | 複数Provider比較、privacy説明、障害復旧、実機対応表 |
+| P0 Design | Architecture, states, provisional decisions documented | Inspect UI and main workflows |
+| P1 State/UI | Implemented; 58 tests and syntax checks at that checkpoint | Browser, keyboard and narrow-screen checks |
+| P2 YouTube | Adapter, frame connection and INSERT implemented | Real A02/A03/A12/A13 checks, no sending, preserved emotes |
+| P3 BYOK | Initial Gemini/Deepgram and key boundaries | Real authentication, audible STT, navigation stop and billing reconciliation |
+| P4 Live evaluation | Procedure only | Mixed languages, music/laughter, short phrases/names; latency/quality/cost |
+| P5 Alpha distribution | Not started at that checkpoint | Provider comparison, privacy information, recovery and support matrix |
 
-初版コードはP1〜P3の土台を並行して作ったが、統合確認が済むまではP3完了・PoC合格としない。確認方法とA01〜A15はACCEPTANCE.mdにまとめる。
+The initial implementation built P1–P3 foundations together, but integration checks are required before calling P3 complete. See [acceptance criteria](ACCEPTANCE.md) for A01–A15.
 
+## 0.1.8 shared translation queue
 
-## 0.1.8 — 翻訳キューの共通化
-
-字幕側のoffscreenからProviderを直接呼ぶ構造を廃止し、session ID付きのCAPTION_TRANSLATEをworkerへ送信する。workerは送信者と現在のcapture IDを検証し、コメント・字幕を同じProvider別キューで処理する。Stopとキー削除は字幕リクエストも取消。HTTP timeout 20秒はキュー待機時間を含まず、実行開始時から数える。初期の最小開始間隔4秒はアカウントの上限を保証する値ではなく設定で変更できる。
+Offscreen no longer calls translation providers directly. It sends CAPTION_TRANSLATE with the session ID to the worker. The worker checks the sender/current capture ID and schedules comments/captions in the same provider-specific queue. Stop/key deletion cancel caption requests too. The 20-second HTTP timeout starts on dispatch, excluding queue wait. The default four-second start interval is adjustable and does not guarantee an account's quota.

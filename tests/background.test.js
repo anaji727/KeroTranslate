@@ -73,3 +73,18 @@ test('worker serializes real caption, comment and back-translation HTTP together
     assert.equal(maximum,1);assert.deepEqual(order,['caption one','comment','back','caption two']);
   }finally{globalThis.fetch=oldFetch;data.local.settings={};delete data.session.capture;}
 });
+
+test('fresh and legacy demo configurations require keys before capturing audio',async()=>{
+  const send=chrome.tabs.sendMessage,capture=chrome.tabCapture;
+  chrome.tabs.get=async()=>({url:'https://www.youtube.com/watch?v=test'});
+  chrome.tabs.sendMessage=async()=>({live:true,overlayReady:true});
+  chrome.tabCapture={getMediaStreamId(){assert.fail('must not capture without configured keys');}};
+  try{for(const settings of [{},{sttProvider:'demo',translationProvider:'demo'}]){
+    data.local.settings=settings;data.session.keys={};
+    const result=await message({type:'START_CAPTURE',tabId:42},options);
+    assert.equal(result.ok,false);assert.match(result.error,/Deepgram API key/);
+    assert.equal(data.session.capture,undefined);
+    data.session.keys={deepgram:'fake'};
+    assert.match((await message({type:'START_CAPTURE',tabId:42},options)).error,/Gemini API key/);
+  }}finally{chrome.tabs.sendMessage=send;chrome.tabCapture=capture;data.local.settings={};data.session.keys={};}
+});

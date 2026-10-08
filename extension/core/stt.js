@@ -25,9 +25,4 @@ export class DeepgramStt {
   fail(message){if(this.stopped)return;this.stop();this.onError(message);}
   stop(){this.stopped=true;clearTimeout(this.timeout);if(this.recorder?.state==='recording')this.recorder.stop();if(this.socket){this.socket.onclose=null;this.socket.onerror=null;this.socket.close();}}
 }
-export class DemoStt {
-  constructor({samples,onResult,onOpen}){Object.assign(this,{samples,onResult,onOpen,index:0});}
-  start(){this.onOpen();const next=()=>this.onResult({id:String(this.index),text:this.samples[this.index++%this.samples.length][0],final:true});next();this.timer=setInterval(next,5500);}
-  stop(){clearInterval(this.timer);}
-}
-export function createSttProvider(provider,options){if(provider==='demo')return new DemoStt(options);if(provider==='deepgram')return new DeepgramStt(options);if(provider==='openai')return new OpenaiStt(options);if(provider==='deepl')return new DeeplStt(options);throw new Error('Unsupported STT provider.');}
+export function createSttProvider(provider,options){if(provider==='deepgram')return new DeepgramStt(options);if(provider==='openai')return new OpenaiStt(options);if(provider==='deepl')return new DeeplStt(options);throw new Error('Unsupported STT provider.');}

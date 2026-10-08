@@ -1,24 +1,28 @@
-# Codexへ渡す依頼文
+# Original design request for Codex
 
-添付の `KeroTranslate-Spec.md` を読み、KeroTranslateのChrome拡張PoCを設計してください。
+[日本語の原文](Codex-Design-Request.jp.md) · [Current implementation](../../README.md)
 
-Chat側で相談していた内容を設計着手用に整理した仕様書です。文書内の「引継ぎ仕様」「相談案」「今回の設計補完案」「未決事項」を区別し、補完案を過去の確定事項として扱わないでください。
+Historical handoff text, retained as a reference rather than a current implementation task.
 
-まずYouTube Live専用・EN↔JP・BYOKを対象に、配信音声のSTT/翻訳字幕とコメント作成支援を設計します。コメントUIはOriginal / MTL / re-MTLを持ち、OriginalとMTLからYouTube純正入力欄へINSERTします。**INSERTは送信ではありません。拡張から投稿を実行せず、最後のPOST/Enterはユーザーが純正UIで行います。** re-MTLは読み取り専用の意味確認補助で、翻訳品質の保証ではありません。
+Read the attached [KeroTranslate specification](KeroTranslate-Spec.md) and design a Chrome extension proof of concept.
 
-字幕は原文のみ・訳文のみ・両方を選択でき、位置は3×3の9マスで変更します。STTと翻訳は独立したProvider Adapterにし、設定から選べる構造にしてください。Provider候補は仕様書を参照し、API仕様・接続方法・価格/無料枠は実装時点の公式資料で検証してください。
+This specification organizes earlier Chat discussions for design work. Distinguish inherited requirements, discussion proposals, new design supplements and unresolved decisions. Do not present supplements as earlier agreements.
 
-最初に以下をまとめてください。
+Initially target YouTube Live, English↔Japanese and BYOK. Design STT/translated captions for stream audio and assistance with writing comments. The comment UI has Original / MTL / re-MTL, with INSERT from Original and MTL into YouTube's native input. **INSERT is not SEND. The extension must not post; the user performs the final POST/Enter in YouTube's native UI.** re-MTL is read-only assistance for checking meaning, not a guarantee of translation quality.
 
-1. PoCの実装範囲とUI案（字幕、Composer、設定）。
-2. Manifest V3での構成、音声取得方法、YouTubeとの接続境界。
-3. 原文・訳文・再翻訳の版管理、STALE、非同期応答、エラー、停止の設計。
-4. Provider候補の実現性と実装・比較順。
-5. 未決事項の推奨案と、判断が必要な項目。
-6. 実装の段階分けと、受入条件・遅延・API使用量の確認方法。
+Captions offer original only, translation only or both, with a 3×3 position selector. Keep STT and translation in independently selectable provider adapters. Consult the specification for candidates and verify APIs, connection methods, pricing and free allowances against official documentation at implementation time.
 
-技術選択は理由付きで提案し、可逆的な細部で質問を連発せず進めてください。UIは動く雛形を見て修正する方針です。既存リポジトリがある場合は、まず現状と作業ルールを確認してください。
+First provide:
 
-OBS、Hosted基盤、学習データ収集、Community Dictionaryの共有基盤、独立MEOW Editor、AI VTuber本体をPoCに増築しないでください。将来への接続点だけを残します。Free/Paidの金額や制限値は未決です。
+1. PoC implementation scope and UI proposals for captions, composer and settings.
+2. MV3 architecture, audio capture and the YouTube integration boundary.
+3. Revisions across Original/MTL/re-MTL, STALE results, asynchronous responses, errors and Stop.
+4. Provider feasibility and implementation/comparison order.
+5. Recommended approaches to open decisions and items requiring a decision.
+6. Implementation stages, acceptance criteria and ways to measure latency/API usage.
 
-この依頼の最初の成果物は設計案と実装計画です。動くUI雛形を作る段階では実API連携済みの箇所と仮データの箇所を明示し、未検証の機能を動作済みと扱わないでください。
+Explain technical choices and proceed with reversible details without repeatedly asking questions. Refine the UI by examining a working prototype. If a repository already exists, inspect its state and working rules first.
+
+Do not expand the PoC into OBS, hosted infrastructure, training-data collection, shared Community Dictionary infrastructure, an independent MEOW Editor or an AI VTuber. Leave extension points only. Free/Paid prices and limits remain undecided.
+
+The first deliverable is a design and implementation plan. In a working UI prototype, identify actual API integrations versus sample data and do not claim unverified features work.

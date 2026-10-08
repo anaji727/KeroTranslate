@@ -3,7 +3,7 @@ const source=await readFile(new URL('../extension/popup.js',import.meta.url),'ut
 async function popup({url='https://www.youtube.com/watch?v=test',capture,failStart=false}={}){
   const nodes=new Map(),messages=[];let poll;
   const node=id=>{if(!nodes.has(id))nodes.set(id,{disabled:false,textContent:''});return nodes.get(id);};
-  const context={document:{getElementById:node},setInterval(fn){poll=fn;},chrome:{tabs:{async query(){return [{id:42,url}];}},runtime:{async openOptionsPage(){},async sendMessage(m){messages.push(m);if(m.type==='START_CAPTURE'){if(failStart)return {ok:false,error:'API key missing.'};capture={tabId:m.tabId,status:'STARTING'};}if(m.type==='STOP_CAPTURE')capture=undefined;return {ok:true,capture,settings:{sttProvider:'demo',translationProvider:'demo',speechLanguage:'ja',captionTarget:'en'}};}}}};
+  const context={document:{getElementById:node},setInterval(fn){poll=fn;},chrome:{tabs:{async query(){return [{id:42,url}];}},runtime:{async openOptionsPage(){},async sendMessage(m){messages.push(m);if(m.type==='START_CAPTURE'){if(failStart)return {ok:false,error:'API key missing.'};capture={tabId:m.tabId,status:'STARTING'};}if(m.type==='STOP_CAPTURE')capture=undefined;return {ok:true,capture,settings:{sttProvider:'deepgram',translationProvider:'gemini',speechLanguage:'ja',captionTarget:'en'}};}}}};
   await vm.runInNewContext(`(async()=>{${source}\n})()`,context);return {node,messages,poll};
 }
 test('popup starts and stops its tab without returning to the main panel',async()=>{

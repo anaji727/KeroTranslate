@@ -1,4 +1,3 @@
-import {FIXTURES} from './core/providers.js';
 import {queuedTranslate} from './core/translation-client.js';
 import {createSttProvider} from './core/stt.js';
 let active=null;
@@ -13,7 +12,7 @@ function fail(s,error){if(active!==s)return;status(s,'ERROR',error);stop();}
 async function cue(s,{text,final,id,sequence:providerSequence}){
   if(active!==s||s.finalIds.has(id))return;
   if(final){s.finalIds.add(id);if(s.finalIds.size>100)s.finalIds.delete(s.finalIds.values().next().value);}
-  s.lastSpeech=Date.now();status(s,s.settings.sttProvider==='demo'?'DEMO':'LISTENING');
+  s.lastSpeech=Date.now();status(s,'LISTENING');
   s.segments??=new Map();
   if(!s.segments.has(id)){s.sequence=Math.max((s.sequence||0)+1,providerSequence||0);s.segments.set(id,providerSequence||s.sequence);if(s.segments.size>200)s.segments.delete(s.segments.keys().next().value);}
   const sequence=s.segments.get(id);
@@ -40,7 +39,7 @@ async function begin(s,streamId){
   try{
     const reply=await chrome.runtime.sendMessage({type:'PRIVATE_CONFIG'});if(active!==s)return;
     if(!reply.ok)throw new Error('Could not load extension settings.');s.keys=reply.keys;
-    if(s.settings.sttProvider!=='demo'){
+    {
       const media=await navigator.mediaDevices.getUserMedia({audio:{mandatory:{chromeMediaSource:'tab',chromeMediaSourceId:streamId}},video:false});
       if(active!==s){media.getTracks().forEach(t=>t.stop());return;}s.media=media;
       s.context=new AudioContext();const source=s.context.createMediaStreamSource(media);source.connect(s.context.destination);await s.context.resume();
@@ -48,9 +47,9 @@ async function begin(s,streamId){
       if(s.context.state!=='running')throw new Error('Audio playback could not resume. Capture stopped.');
       media.getTracks().forEach(t=>t.onended=()=>fail(s,'Tab audio ended. Start again from the KeroTranslate panel.'));
     }
-    s.provider=createSttProvider(s.settings.sttProvider,{key:s.keys[s.settings.sttProvider],language:s.settings.speechLanguage,samples:FIXTURES,onResult:event=>cue(s,event),onBytes:n=>s.metrics.audioBytes+=n,onError:error=>fail(s,error),onOpen:()=>{
-      status(s,s.settings.sttProvider==='demo'?'DEMO':'LISTENING');s.lastSpeech=s.started=Date.now();
-      s.tick=setInterval(()=>{if(active!==s)return;if(s.settings.sttProvider!=='demo')s.metrics.audioSeconds=(Date.now()-s.started)/1000;notify(s,'METRICS',{metrics:s.metrics});if(Date.now()-s.lastSpeech>15000)status(s,'NO_SPEECH');},5000);
+    s.provider=createSttProvider(s.settings.sttProvider,{key:s.keys[s.settings.sttProvider],language:s.settings.speechLanguage,onResult:event=>cue(s,event),onBytes:n=>s.metrics.audioBytes+=n,onError:error=>fail(s,error),onOpen:()=>{
+      status(s,'LISTENING');s.lastSpeech=s.started=Date.now();
+      s.tick=setInterval(()=>{if(active!==s)return;s.metrics.audioSeconds=(Date.now()-s.started)/1000;notify(s,'METRICS',{metrics:s.metrics});if(Date.now()-s.lastSpeech>15000)status(s,'NO_SPEECH');},5000);
     }});
     await s.provider.start(s.media);
   }catch(e){fail(s,e.name==='NotAllowedError'?'Tab audio permission was denied.':e.message||'Audio capture failed.');}

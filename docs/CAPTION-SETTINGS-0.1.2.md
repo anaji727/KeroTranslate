@@ -1,14 +1,18 @@
 # Caption timing and size — 0.1.2
 
-字幕が表示されることはユーザー環境で確認済み。翻訳到着前に字幕が消える問題に対応しました。
+[日本語](CAPTION-SETTINGS-0.1.2.jp.md) · [Current installation instructions](../README.md)
 
-- 翻訳待ちの原文は時間切れで消しません。前の翻訳があれば、対応する原文と一緒に維持します。
-- 翻訳到着後に表示タイマーを開始します。次の翻訳待ちなら表示を維持し、新しい翻訳が到着したら置き換えます。停止時は即座に消去します。
-- 次の発話で進行中の翻訳をキャンセルしません。翻訳APIが遅い場合は待機中の最新1区間だけを残し、遅延が積み上がるのを防ぎます。この場合、途中の区間は省略されます。
-- Settings → 03 / Captions → Caption size: 75 / 100 / 125 / 150 / 200%。初期値100%。原文と翻訳を同じ倍率で拡大します。
-- Keep captions after translation: 5 / 7 / 10 / 15 / 20秒。初期値10秒。原文のみモードは原文更新から計測します。
-- 単体プレビューでもサイズを変更できます。
+Historical release note. The standalone preview mentioned below was removed in Beta 0.1.10.
 
-更新した拡張を再読み込み後、YouTubeも再読み込みしてください。APIキーは拡張の再読み込みで消えるため再入力が必要です。設定保存後はStart captionsで再開します。
+The user confirmed that captions appeared in their environment. This update addresses captions disappearing before their translation arrives.
 
-翻訳待ち、連続発話、停止後の遅延応答、表示時間、サイズ設定をオフラインテストで検証済み。更新後の実配信での読みやすさ・表示確認はユーザー環境での確認待ちです。
+- Source text awaiting translation does not expire. If an earlier translation exists, keep it and its corresponding original visible.
+- Start the reading timer when translation arrives. While the next translation is pending, retain the current caption; replace it when the next translation arrives. Stop clears captions immediately.
+- A new utterance does not cancel an active translation. If the API is slow, keep only the newest waiting segment to prevent an ever-growing delay. Intermediate segments are skipped in this case.
+- **Settings → 03 / Captions → Caption size:** 75 / 100 / 125 / 150 / 200%, default 100%. Scale the original and translation together.
+- **Keep captions after translation:** 5 / 7 / 10 / 15 / 20 seconds, default 10. Original-only mode measures from the original-text update.
+- The standalone preview at the time also allowed size changes.
+
+Reload the updated extension and then YouTube. Extension reload clears session API keys, so enter them again. Save settings and restart captions.
+
+Offline tests cover pending translation, continuous speech, late responses after Stop, reading time and size settings. Readability and live display after this update still require checks in the user's environment.

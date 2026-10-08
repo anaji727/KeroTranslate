@@ -1,321 +1,286 @@
-# KeroTranslate — Codex設計引き継ぎ仕様書
+# KeroTranslate — original design handoff specification
 
-> 同梱資料の名称を2026-10-07の決定に合わせて統一。機能仕様の原案であり、現在の実装状況はREADMEを参照。
+[日本語の原文](KeroTranslate-Spec.jp.md) · [Current implementation](../../README.md)
 
-作成日: 2026-10-06（JST）  
-版: 0.1 / 過去相談の整理・設計着手用  
-対象: Chrome拡張のPoC。実装済みであることを示す文書ではない。
+Names were standardized following the October 7, 2026 decision. This is the original feature proposal, not the current implementation status.
 
-## 1. この文書の読み方・出典
+Created October 6, 2026 JST. Version 0.1, organizing earlier discussions for design work. Scope: a Chrome extension PoC; this document does not certify that features are implemented.
 
-本書はChat側の相談と、ユーザーが次のチャットへ持ち込んだ詳細な引き継ぎ資料から、Kero関連部分を抽出して再構成したもの。全チャットの全発言を逐語照合したものではない。
+## 1. Reading this document and sources
 
-- **引継ぎ仕様**: 引き継ぎ資料に方針・仕様として記載されていた内容。
-- **相談案**: 過去相談に登場した候補。最終決定とみなさない。
-- **今回の設計補完案**: 状態管理・受入条件など、Codexが設計へ進めるよう今回具体化した内容。過去の合意と混同しない。
-- **未決事項**: 資料だけでは決められない項目。
+This reorganizes Kero-related content from earlier Chat discussions and detailed handoff material brought to the next chat. It is not a verbatim reconciliation of every message.
 
-主な参照元:
+- **Inherited requirements:** policies/specifications recorded in the handoff.
+- **Discussion proposals:** candidates from earlier discussions, not final decisions.
+- **New design supplements:** details such as state handling and acceptance criteria added to make design actionable, not prior agreements.
+- **Open decisions:** matters the material alone does not settle.
 
-1. [引継ぎ完了報告](https://chatgpt.com/c/6abfc934-74cc-83e9-a021-f80ecffff268) 冒頭添付「貼り付けたテキスト（1）.txt」。資料表題は「次スレッド用ハンドオーバー / 2026-10-02 深夜時点」。KeroTranslate、PoC、Provider、料金、UI/UX、Overlay、辞書、Streamer Planの各節を参照。
-2. [スレッド移行確認](https://chatgpt.com/c/6aba4a84-b388-83e8-9246-e54e5289033b)（検索結果・本文取得では「20261003」表記もあり）。リリース時の説明、STT/MTL/re-MTL、BYOK、最小構成を維持する方針などの周辺会話を確認。
+Main source records:
 
-正式表記はKeroTranslate。リポジトリ、プロダクトUI、同梱資料の名称を統一する。
+1. [Handoff completion report](https://chatgpt.com/c/6abfc934-74cc-83e9-a021-f80ecffff268), initial attached text headed “Handoff for the next thread / late night October 2, 2026.” Referenced sections cover KeroTranslate, PoC, providers, pricing, UI/UX, overlays, dictionaries and Streamer Plan.
+2. [Thread migration confirmation](https://chatgpt.com/c/6aba4a84-b388-83e8-9246-e54e5289033b), also labeled “20261003” in retrieved material, for release explanations, STT/MTL/re-MTL, BYOK and keeping the initial system small.
 
-## 2. 何を作るか
+The official name is KeroTranslate across the repository, product UI and included documents.
 
-**YouTube Liveを見ながら、配信音声を理解し、別言語のコメントを素早く作って、自分で確認して投稿するためのChrome拡張。**
+## 2. Product purpose
 
-主対象は英語圏のJP VTuber視聴者。日本語と英語が混在する配信で、音声の文字起こし・翻訳字幕と、視聴者自身のコメント翻訳を提供する。EN→JP、JP→ENの双方を扱う。
+**A Chrome extension for understanding YouTube Live audio, quickly drafting comments in another language, reviewing them and posting manually.**
 
-価値は「翻訳APIを呼べること」だけではなく、視聴からコメント投稿までの手間と迷いを減らすこと。ライブチャットでは数秒の遅れが意味を持つため、普段使う操作を絞り、処理状態が一目で分かるUIにする。
+The main audience is English-speaking viewers of Japanese VTubers. Support English→Japanese and Japanese→English, including streams where both languages occur. Provide transcription/translated audio captions and translation of the viewer's own comments.
 
-ブランドは「配信のコメントに便利な小さな道具」。国際コミュニティ基盤などへ大きく膨らませない。English-firstのUIを基本方針とする。🐸を表ブランド、🐈️を将来の辞書・開発補助側に使う。
+The value is reducing effort and uncertainty between watching and commenting, beyond simply invoking a translation API. Seconds matter in live chat; keep frequent actions few and processing states easy to understand.
 
-参考コピー（過去相談）:
+Position it as a small tool for stream-side comments, not a broad international-community platform. Prefer an English-first UI. Use the frog as the public brand and the cat for future dictionary/developer assistance.
 
-> KeroTranslate — It's a handy little tool to help with your comments.
+Earlier example copy: “KeroTranslate — It's a handy little tool to help with your comments.”
 
-## 3. PoCの範囲
+## 3. PoC scope
 
-### 3.1 引継ぎ仕様
+### 3.1 Inherited requirements
 
-| 項目 | PoCの範囲 |
+| Area | Scope |
 |---|---|
-| 実行形態 | Chrome Extension / Manifest V3 |
-| 対象サービス | YouTube Live |
-| 対応言語 | 英語・日本語、双方向 |
-| Incoming | 配信音声 → STT → 翻訳 → 動画上の字幕 |
-| Outgoing | 自分の原文 → 翻訳 → 再翻訳 → 純正入力欄へINSERT |
-| 投稿 | YouTube純正UIでユーザーが実行 |
-| API利用 | BYOK。ユーザー自身のAPIキーを使う |
-| Provider | STTと翻訳を分離し、設定で切替可能にする |
-| 辞書 | 必要なら最初はローカルJSON程度 |
-| 料金の方向性 | 制限付きFreeUseと廉価BYOK Paid。数値・決済方式は未決 |
-| データ収集 | PoCでは品質改善用の翻訳データを収集しない |
+| Runtime | Chrome extension, Manifest V3 |
+| Service | YouTube Live |
+| Languages | English and Japanese, both directions |
+| Incoming | Stream audio → STT → translation → video overlay |
+| Outgoing | User's Original → MTL → re-MTL → INSERT into native input |
+| Posting | User operates YouTube's native UI |
+| API use | BYOK, the user's own keys |
+| Providers | Separate STT/translation, selectable in settings |
+| Dictionary | Small local JSON if needed initially |
+| Pricing direction | Limited FreeUse and inexpensive BYOK Paid; figures/payment method undecided |
+| Collection | No translation-data collection for quality improvement in the PoC |
 
-### 3.2 PoCに含めないこと
+### 3.2 Exclusions
 
-- OBS連携、Streamer Planの製品実装。
-- Hosted翻訳、開発者負担のAPI枠、Hosted課金基盤。
-- 全視聴者コメントの自動翻訳。
-- 拡張による自動投稿・純正POSTの代理実行。
-- Community Dictionaryの公開・共有基盤、独立MEOW Editor。
-- 学習用データ収集、独自翻訳モデル、学習パイプライン。
-- AI VTuber本体、Persona、Live2D、ComfyUI統合。
-- 自由ドラッグ式字幕配置の本格実装。
+- OBS integration or a production Streamer Plan.
+- Hosted translation, developer-funded API allowances or hosted billing.
+- Automatic translation of every viewer's comments.
+- Automatic posting or proxy execution of native POST.
+- Shared/public Community Dictionary infrastructure or an independent MEOW Editor.
+- Training-data collection, a proprietary translation model or training pipeline.
+- An AI VTuber, Persona, Live2D or ComfyUI integration.
+- A full freely draggable caption-positioning system.
 
-Free/Paidは製品構想として保持するが、**動作検証用PoCに決済サービスを必須化しない**ことを今回の補完案とする。実際に配布するβでどこまで課金を入れるかは別途決める。
+Retain Free/Paid as a product concept, but the new design supplement does not require payment services to validate the PoC. Decide separately what billing belongs in a distributed beta.
 
-## 4. 利用フロー
+## 4. User flows
 
-### 4.1 配信を理解する
+### 4.1 Understand the stream
 
-1. YouTube Liveを開く。
-2. Kero側でSTT・翻訳Provider、必要なAPIキー、言語設定を指定する。
-3. ユーザー操作で配信音声の取得を開始する。
-4. 音声を文字起こしし、対象言語へ翻訳する。
-5. 動画上へ原文・訳文、または選択した片方を表示する。
-6. 邪魔な場所に字幕があれば9マスの位置選択で移動する。
-7. 利用を止めたら音声取得・新規API処理を停止する。
+1. Open YouTube Live.
+2. Select STT/translation providers, required keys and language settings.
+3. Explicitly start capture.
+4. Transcribe audio and translate into the target language.
+5. Overlay Original, MTL or both.
+6. Move captions using nine positions if they obscure content.
+7. Stop audio capture and new API work when finished.
 
-開始・停止の具体的動作は今回の補完案。対象タブだけの音声をどう取得するか、日英混在音声をどう判定するかは技術検証事項。
+Specific start/stop behavior is a new design supplement. Capturing only the target tab and handling mixed Japanese/English are technical validation items.
 
-### 4.2 コメントする
+### 4.2 Comment
 
-1. Originalへ自分の文章を入力する。
-2. 入力が落ち着いたらMTLを生成する。
-3. MTLを原文側の言語へ戻したre-MTLを読み、意味の大きなズレを確認する。
-4. OriginalまたはMTLのINSERTを押す。
-5. 選んだ文章がYouTube純正チャット入力欄へ入る。
-6. ユーザー自身が純正POSTまたは純正入力欄のEnterで投稿する。
+1. Enter text in Original.
+2. Generate MTL when typing settles.
+3. Read re-MTL, translated back into the original language, to spot major meaning changes.
+4. Click Original or MTL INSERT.
+5. Put the selected text into YouTube's native input.
+6. The user posts via native POST or Enter.
 
-**INSERTとPOSTは別操作。Keroは投稿しない。** 再翻訳は品質保証・正解判定ではなく、意味の事故を短時間で見つけるためのsanity check。
+**INSERT and POST are separate. Kero does not post.** Back-translation is a quick sanity check, not a quality certificate or correctness judgment.
 
-## 5. ComposerのUI仕様
+## 5. Composer UI
 
-### 5.1 基本構成（引継ぎ仕様・有力案）
+### 5.1 Inherited / leading layout proposal
 
-YouTubeチャット領域の上約2/3に純正チャットを残し、下約1/3にKero Composerを配置する。比率は設計目安であり、狭い画面でも固定比率を強制する要求ではない。
+Keep native chat roughly in the upper two-thirds and place the composer in the lower third. This is a design guide, not a fixed ratio on small screens.
 
 ```text
-┌────────────────────────────────────┐
-│ YouTube純正ライブチャット           │
-│ 他の視聴者のコメントは原文のまま     │
-├────────────────────────────────────┤
-│ JA → EN    Provider    状態          │
-│ Original [自分の入力              ] │
-│                           [INSERT] │
-│ MTL      [翻訳結果                ] │
-│                           [INSERT] │
-│ re-MTL   再翻訳結果（read-only）     │
-├────────────────────────────────────┤
-│ YouTube純正入力欄          [POST]    │
-│ 純正Emoteパネル                     │
-└────────────────────────────────────┘
+YouTube native live chat — other viewers' messages unchanged
+-----------------------------------------------------------
+EN ↔ JA       Provider       State
+Original [editable user text]                    [INSERT]
+MTL      [translated text]                       [INSERT]
+re-MTL   read-only meaning check
+-----------------------------------------------------------
+Native YouTube input [POST] and native emote panel
 ```
 
-- Original側のINSERTは、原語で送りたい場合や、自力で書いた文章を送る場合にも使える。
-- MTL側のINSERTは翻訳結果を挿入する。
-- re-MTLは読み取り専用。INSERTを設けず、入力欄に見せすぎない。
-- INSERTの説明文候補: `Insert into YouTube chat input. Does not send.`
-- 言語方向、Provider、処理状態を短く表示する。
-- APIキー等の詳細設定は通常操作面の奥に置く。
-- YouTube純正のチャット閲覧・投稿・Emoteを壊さない。
+Original INSERT also serves users writing directly in their intended language. MTL INSERT uses translated text. re-MTL has no INSERT and should not look like an editable input. Suggested copy: “Insert into YouTube chat input. Does not send.” Display direction/provider/state briefly; keep API-key details behind settings. Preserve native chat reading, posting and emotes.
 
-### 5.2 未決のUI動作
+### 5.2 Unsettled interactions
 
-MTLの直接編集を許すかは資料だけでは確定しない。**今回の推奨案は編集可能**とし、編集時にはre-MTLを再生成する。原文へ戻って修正する方式も選択肢として残す。
+Earlier material did not settle direct MTL editing. The new recommendation is to allow it and regenerate re-MTL, while editing Original remains an alternative.
 
-純正入力欄に既存の下書きがある場合のINSERT動作も未決。今回の推奨は、空欄なら即挿入、非空なら上書きを黙って行わず、置換するか既存文を残すかをその場で選べる形。連打による重複挿入も防ぐ。
+For existing native drafts, the recommendation is immediate insertion when empty and an explicit replace/keep choice otherwise. Prevent duplicate insertion on repeated clicks. The inherited material did not settle this behavior.
 
-### 5.3 古い訳文を使わせない（今回の設計補完案）
+### 5.3 Prevent stale translation use — new supplement
 
-原文、訳文、再翻訳を同じ入力版に結び付ける。原文変更・翻訳方向変更・Provider変更などが起きたら既存結果をSTALEにする。遅れて届いた古い応答は最新結果へ上書きしない。
+Bind Original, MTL and re-MTL to the same revision. Changes to input, direction or provider mark results stale; late responses cannot overwrite current results.
 
-| 状態 | 表示・挙動 |
+| State | Display / behavior |
 |---|---|
-| EMPTY | 原文なし。翻訳リクエストを送らない |
-| EDITING / STALE | 入力変更中、または表示結果が旧版。MTLのINSERTを無効化 |
-| TRANSLATING | 最新原文を翻訳中 |
-| BACK_TRANSLATING | 最新MTLは完成、再翻訳中 |
-| READY | 現在の入力に対応するMTLとre-MTLが完成 |
-| ERROR | 失敗した工程を表示。原文は保持して再試行可能 |
+| EMPTY | No original; no translation request |
+| EDITING / STALE | Editing or old results; disable MTL INSERT |
+| TRANSLATING | Translate current Original |
+| BACK_TRANSLATING | Current MTL available; re-MTL pending |
+| READY | Matching MTL and re-MTL complete |
+| ERROR | Identify failed stage, preserve Original and permit retry |
 
-OriginalのINSERTは原文があり挿入先が利用可能なら使える。MTLのINSERTをre-MTL完成まで待たせるかは未決。初期案ではREADYまで待つが、速射性への影響を実機で比較する。
+Original INSERT can work when nonempty and the target is available. Whether MTL INSERT must wait for re-MTL was open; initially recommend waiting for READY, then compare responsiveness in real use. Debounce, timeouts and retry counts were not agreed numbers; measure before fixing them. Do not translate intermediate Japanese IME composition.
 
-入力debounceの具体的なミリ秒数、タイムアウト、再試行回数は過去合意なし。設定可能な内部値として計測で決める。日本語IME変換中の途中文字列では翻訳を走らせない。
+## 6. Audio and captions
 
-## 6. 音声・字幕仕様
+### 6.1 Inherited requirements
 
-### 6.1 引継ぎ仕様
+Overlay STT source and translated text. Choose MTL only / Original only / Original + MTL, one or two lines, and a 3×3 anchor grid:
 
-- 配信音声のSTT原文と翻訳文を動画上に重ねる。
-- 表示を `MTL only` / `Original only` / `Original + MTL` から選べる。
-- 1段・2段の表示を選択できる。
-- 字幕位置は3×3のアンカー。ユーザーには9マスUIで選ばせる。
-
-| | 左 | 中央 | 右 |
+| | Left | Center | Right |
 |---|---|---|---|
-| 上 | TL | TC | TR |
-| 中 | ML | MC | MR |
-| 下 | BL | BC | BR |
+| Top | TL | TC | TR |
+| Middle | ML | MC | MR |
+| Bottom | BL | BC | BR |
 
-配信ごとにアバター・ゲームUI等の位置が異なるため、細かい座標入力よりワンクリックの移動を優先する。
+One-click movement takes priority over coordinates because avatars/game UI vary by stream.
 
-### 6.2 相談案
+### 6.2 Discussion proposals
 
-フォントサイズ、最大幅、マージン、原文と訳文の表示順の設定。将来のStreamer Planでは自由配置も候補だがPoCには持ち込まない。
+Font size, maximum width, margins and original/translation order. Free placement may belong to a future Streamer Plan, not the PoC.
 
-### 6.3 今回の設計補完案・検証点
+### 6.3 New supplements / validation
 
-- STTの途中結果と確定結果を区別する。翻訳をどの時点で発火するかは遅延とAPI使用量を比較して決める。
-- 原文と訳文を発話単位のIDで結び付け、非同期応答の順序が入れ替わっても対応を崩さない。
-- 開始、停止、権限拒否、無音、Providerエラーを見分けられる。
-- 音声取得中もユーザーが配信音声を通常どおり聴けることを検証する。
-- 動画遷移・タブ終了・停止後の古い字幕やリクエストを残さない。
-- 日英が切り替わる配信を主要な評価素材にする。言語固定・自動判定・混在対応の具体的な仕様は設計時に比較する。
-- 字幕の保持時間、文字数、改行、履歴、フルスクリーン対応の範囲は未決。
+- Distinguish partial and final STT; compare translation-trigger timing against latency/API use.
+- Associate original/translation by utterance ID despite response reordering.
+- Distinguish start, stop, denied permissions, no speech and provider errors.
+- Verify that stream audio remains audible during capture.
+- Prevent old captions/requests surviving navigation, closure or Stop.
+- Use Japanese/English switching as a core evaluation case; compare fixed, automatic and mixed recognition.
+- Retention, character limits, wrapping, history and fullscreen scope remain open.
 
-## 7. Providerとキー
+## 7. Providers and keys
 
-### 7.1 引継ぎ仕様
+### 7.1 Inherited requirements
 
-STTとTranslationを独立したAdapterにする。`ISttProvider` / `ITranslationProvider` のように役割を分離し、設定画面から切り替えられる。BYOKは将来もProvider選択の自由を残す。
+Separate STT and translation into adapters such as `ISttProvider` and `ITranslationProvider`, selectable through settings. Retain BYOK provider choice in future versions.
 
-| 役割 | 過去相談の候補（採用確定ではない） |
+| Role | Earlier candidates, not confirmed selections |
 |---|---|
-| Translation | DeepL、OpenAI、Gemini |
-| STT | Azure Speech、Groq Whisper、OpenAI、Deepgram等、Local Whisper |
+| Translation | DeepL, OpenAI, Gemini |
+| STT | Azure Speech, Groq Whisper, OpenAI, Deepgram, Local Whisper |
 
-全候補をAdapter化して比較する案も出ていた。「最初は必ず2社に絞る」という合意はない。一方で、候補一覧は全社対応をPoC合格の必須条件にしたものでもない。実装順と比較範囲を設計で提案する。
+Adapting every candidate for comparison was discussed. There was no agreement to restrict the first release to exactly two companies, nor a requirement to implement every candidate to pass the PoC. Propose order and comparison scope.
 
-Local Whisper / faster-whisperは今後の評価対象。拡張内だけで動くと仮定しない。ローカル補助プロセスを要する場合は別構成として示す。
+Evaluate Local Whisper/faster-whisper separately; do not assume extension-only execution. If a helper process is required, document that architecture. This handoff did not verify free allowances, prices, APIs or browser connectivity. Verify official sources during implementation; old discussion figures are not settled facts.
 
-無料枠・価格・API仕様・ブラウザーからの接続可否は、本書では検証していない。実装時に各社の公式資料で確認する。過去会話の無料枠を確定情報として使わない。
+### 7.2 New supplements
 
-### 7.2 今回の設計補完案
+- Decouple UI, YouTube-specific code and provider SDKs.
+- Handle STT/translation keys separately.
+- Never expose keys in YouTube DOM, messages, routine logs or settings exports.
+- Specify storage, persistence, deletion and execution boundaries; storage alone is not secure encrypted custody.
+- Make processing destinations and active providers understandable.
+- Do not automatically switch to a different paid provider; any fallback must remain within user choices.
+- Distinguish authentication, quota, rate-limit, network and timeout errors.
+- Distinguish sending audio/text to providers from Kero collecting data for improvement. BYOK does not necessarily mean offline.
 
-- UI、YouTube固有処理、Provider SDKを相互に直結させない。
-- STT用キーとTranslation用キーを個別に扱う。
-- キーをYouTubeページのDOM・メッセージ・通常ログ・設定エクスポートへ出さない。
-- 保存先、永続保存するか、削除方法、ページとの実行境界を設計で示す。「保存しただけで安全な暗号化保管」と説明しない。
-- API処理先と利用中Providerを分かるようにする。
-- 自動で別の有料Providerへ切り替えない。Fallbackを導入するなら利用者が選択した範囲で行う。
-- 認証失敗、利用枠不足、レート制限、ネットワーク障害、タイムアウトを区別して表示する。
-- 外部Providerへの音声・テキスト送信と、Kero運営による品質改善データ収集は区別する。BYOKは必ずしもオフライン利用ではない。
+## 8. Architecture and YouTube integration
 
-## 8. 構成案とYouTubeへの組み込み
+Earlier proposals used an extension-owned container/Shadow DOM rather than rewriting all YouTube DOM/CSS. A LIVE CHAT | KERO tab switch was considered, but the native-chat-plus-composer layout became the leading proposal.
 
-過去相談では、拡張側所有の独立Container / Shadow DOMを使い、YouTube全体のDOM/CSSを書き換えない方針が提案されていた。`LIVE CHAT | KERO` のタブ切替案も出たが、後半では純正チャット上2/3＋Composer下1/3が有力。
-
-**今回の初期推奨はComposer増設案**。独立ContainerでKero UIを管理し、YouTube側への依存をAdapterへ集約する。
+The initial recommendation is an added composer with its own container and a YouTube adapter boundary:
 
 ```text
-YouTube / 音声取得
-  └─ STT Adapter → 発話イベント → Translation Core → 字幕表示
-
-Composer Original
-  └─ Translation Core → MTL → Back Translation → re-MTL
-       └─ ユーザーのINSERT → YouTube Chat Adapter → 純正入力欄
-
-Settings / Provider Registry / 最小ローカル辞書
-  └─ 上記の各処理へ設定を提供
+YouTube / capture → STT adapter → utterance events → translation core → captions
+Composer Original → translation core → MTL → back-translation → re-MTL
+User INSERT → YouTube chat adapter → native input
+Settings / provider registry / minimal local dictionary → configuration
 ```
 
-実行環境の切り分け（Content Script、Service Worker、音声処理用の実行環境等）は設計成果物で具体化する。本書はManifest V3で各APIが利用できることを検証した技術設計書ではない。
+Specify content scripts, worker and audio runtime in the design deliverable. This handoff is not a verified MV3 API feasibility document.
 
-設計時に確認すること:
+Check frame boundaries/insertion, SPA navigation, chat reload/DOM reconnection, preserving emotes/drafts, safe failure on unsupported pages or unknown targets, minimal permissions and current YouTube terms. INSERT-only operation does not by itself prove compliance.
 
-- YouTubeチャットのフレーム境界と、純正入力欄への挿入方法。
-- 動画ページ内遷移、チャット再読み込み、DOM変更時の再接続。
-- 純正Emoteや入力中の文章を壊さないこと。
-- 対象外ページ・挿入先不明時に無理に別の入力欄へ書かないこと。
-- 不要な権限を追加しないこと。
-- YouTubeの利用条件に適合する方法を現行の公式資料で確認すること。INSERT方式を採用しただけで規約適合が確定したと扱わない。
+An output boundary such as `onTranslation(...)` is enough for future destinations. Do not build an OBS server in the PoC.
 
-将来の出力先追加に備え、Translation Coreは`onTranslation(...)`相当の出力境界を持てばよい。PoCの段階でOBSサーバー等まで作らない。
+## 9. Dictionaries and future concepts
 
-## 9. 辞書と将来構想
+### 9.1 Initial dictionary
 
-### 9.1 最初の辞書
+Small local JSON is acceptable. Begin with limited needs such as preserving proper names or specifying translations. Format, precedence and application timing remain undecided.
 
-ローカルJSON程度を許容する。固有名詞の保持・訳語指定など、必要な小さな用途から始める。データ形式、優先順位、適用タイミングは未決。
+### 9.2 After the PoC
 
-### 9.2 PoC後に検討するもの
-
-| 構想 | 内容 |
+| Concept | Purpose |
 |---|---|
-| Community Dictionary | 配信者・作品・ゲーム等の辞書Packの作成・共有 |
-| 自動Pack選択 | Channel IDに紐付けたロード |
-| MEOW Editor | 辞書編集用の独立ツール |
-| Developer (MEOW) Mode | raw STT、遅延、言語判定、イベント、ログ出力 |
-| Hosted Free / Contributor | API込みの制限枠と、明示同意による品質改善データ提供 |
-| Hosted Paid | API込み。データ提供同意と切り離す。Providerは運営固定の想定 |
-| Streamer Plan | OBS/API、配信字幕、配信管理、辞書、モデレーター共有、多言語等 |
-| 独自モデル | 辞書→軽量な書き換え・再評価→分野特化翻訳の順で検討 |
+| Community Dictionary | Create/share streamer, work or game dictionary packs |
+| Automatic pack selection | Load by channel ID |
+| MEOW Editor | Independent dictionary editor |
+| Developer (MEOW) Mode | Raw STT, latency, language detection, events and logs |
+| Hosted Free / Contributor | Limited included API allowance and explicit opt-in improvement data |
+| Hosted Paid | Included API independent of data-sharing consent; operator-selected providers envisioned |
+| Streamer Plan | OBS/API, captions, stream management, dictionaries, moderator sharing and multilingual support |
+| Proprietary models | Consider dictionaries, then lightweight rewriting/re-evaluation, then domain translation |
 
-辞書要素の相談候補はterm、source/target language、translate/preserve/replace、priority、任意regex、channel scope、author、version。すべてを初版JSONへ詰め込む必要はない。
+Possible dictionary fields include term, source/target languages, translate/preserve/replace mode, priority, optional regex, channel scope, author and version. Not all belong in the first JSON format.
 
-Hosted登場後もBYOK Paidを残す方針。価格、時間制限、機能差、課金単位は未決。
+The intention was to retain BYOK Paid after Hosted arrives. Prices, time limits, feature differences and billing units remain open. Potential future training records include originals, translations, corrections, provider/dictionary versions and video/channel context, but the PoC collects none. INSERT text may differ from the final posted message; do not claim observation without a defined method.
 
-将来の学習用候補には原文・訳文・修正・Provider・辞書版・動画/チャンネル文脈等があるが、PoCでは収集しない。「最終送信文」はINSERTした文と同一とは限らないため、将来も観測方法を決めずに取得済みと扱わない。
+## 10. Acceptance criteria — new supplement
 
-## 10. 受入条件（今回の設計補完案）
+No numeric performance targets were established in earlier discussion. Measure first, then judge.
 
-設計・実装の確認に使う条件。数値の性能目標は過去相談で確定していないため、まず計測結果を出して判断する。
-
-| ID | シナリオ | 合格条件 |
+| ID | Scenario | Pass condition |
 |---|---|---|
-| A01 | Originalを日本語/英語で入力 | 指定方向のMTLと、そのMTLに対応したre-MTLが表示される |
-| A02 | OriginalのINSERT | 原文が純正入力欄へ入り、投稿は発生しない |
-| A03 | MTLのINSERT | 現在の訳文が純正入力欄へ入り、投稿は発生しない |
-| A04 | re-MTLを操作 | 読み取り専用でINSERTが存在しない |
-| A05 | 入力を素早く変更 | 旧版の応答が最新入力の結果として表示・挿入されない |
-| A06 | 日本語IMEで変換 | 変換途中の入力による不要な翻訳発火を防ぐ |
-| A07 | キー不正・レート制限・通信失敗 | 工程と失敗が分かり、原文が消えず再試行できる |
-| A08 | STTと翻訳の設定を変更 | それぞれ独立に切り替えられる。対応済みProvider間で確認 |
-| A09 | 配信音声を取得 | 音声を聴きながらSTTと翻訳字幕を利用できる |
-| A10 | 字幕設定を変更 | 3つの表示モードと9つの位置を切り替えられる |
-| A11 | 停止・ページ遷移 | 古い音声処理・結果が別動画へ混入しない |
-| A12 | 純正入力欄に下書きあり | 決定した挿入ルールに従い、黙って下書きを消さない |
-| A13 | YouTube通常機能を使う | チャット閲覧、純正投稿、Emoteが継続利用できる |
-| A14 | 送信先・保存内容を確認 | 選択Provider以外への不要な送信や、Kero側の改善データ収集がない |
-| A15 | 英語と日本語が混じる実配信で評価 | 認識失敗・翻訳品質・遅延・費用を記録し、混在時の制約を説明できる |
+| A01 | Enter Japanese/English Original | Requested MTL and matching re-MTL |
+| A02 | Original INSERT | Original enters native input without posting |
+| A03 | MTL INSERT | Current translation enters native input without posting |
+| A04 | Interact with re-MTL | Read-only, no INSERT |
+| A05 | Rapid edits | Old responses cannot appear/be inserted as current |
+| A06 | Japanese IME | Avoid requests during composition |
+| A07 | Bad key/rate limit/network failure | Clear failed stage; preserve Original and allow retry |
+| A08 | Change providers | Independently switch implemented STT/translation adapters |
+| A09 | Capture audio | Hear the stream while using STT/translated captions |
+| A10 | Caption settings | Three modes and nine positions work |
+| A11 | Stop/navigation | No old audio/results leaking into another video |
+| A12 | Existing draft | Follow chosen insertion policy without silent erasure |
+| A13 | Native YouTube features | Reading, native posting and emotes remain usable |
+| A14 | Inspect transfers/storage | No unnecessary destinations or Kero improvement collection |
+| A15 | Mixed-language stream | Record recognition failures, quality, latency and cost; explain limitations |
 
-計測項目: 音声確定までの時間、STT→MTLの時間、文字入力確定→MTL→re-MTLの時間、API使用量、操作からINSERTまでの手間。再翻訳が自然であることだけで翻訳の正確さを評価しない。
+Measure time to STT final, STT→MTL, settled input→MTL→re-MTL, API usage and effort to INSERT. Fluent back-translation alone does not establish correctness.
 
-## 11. 設計で決める事項
+## 11. Decisions for the design phase
 
-| 項目 | 現時点の扱い |
+| Topic | Status in the handoff |
 |---|---|
-| 正式名称 | KeroTranslateに統一（2026-10-07） |
-| UIフレームワーク・言語・ビルド | 過去合意なし。Codexが理由付きで提案 |
-| 最初に動かすProvider | 候補から選定。全社比較の範囲も提案 |
-| Incomingの言語判定 | 日英混在を評価し、自動/固定の選択を決める |
-| 翻訳と再翻訳のProvider | 同一/別Providerの選択可否は未決 |
-| MTL直接編集 | 今回は許可を推奨。採否と再翻訳発火を決める |
-| INSERTとre-MTL待ち | 速さと誤爆防止を比較して決める |
-| 下書きへの挿入 | 置換/追記/確認の方針を決める |
-| 字幕の区切り・保持・改行 | 計測しながら具体化 |
-| 対応画面 | 通常視聴を基準に、全画面・シアター・ポップアウト等の範囲を明示 |
-| キー保存 | 保存期間、保存境界、削除を設計 |
-| Free/Paid | 金額・制限・課金の導入時期を未決のまま明示 |
-| 辞書 | 最小形式とProvider別の適用方法を提案 |
-| 配布 | ローカル読込、α配布、Store公開の段階と必要作業を提案 |
+| Official name | KeroTranslate, standardized October 7 |
+| UI framework/language/build | No prior agreement; propose with reasons |
+| First providers | Select candidates and propose comparison scope |
+| Incoming language detection | Evaluate mixed speech, then choose auto/fixed options |
+| MTL/re-MTL providers | Same/separate selection undecided |
+| Direct MTL editing | Recommended; decide adoption and retranslation trigger |
+| INSERT before re-MTL | Compare speed and mistake prevention |
+| Draft insertion | Decide replace/append/confirmation |
+| Caption boundaries/retention/wrapping | Specify through measurement |
+| Supported layouts | Normal watch baseline; explicitly state fullscreen/theater/pop-out scope |
+| Key storage | Design lifetime, boundary and deletion |
+| Free/Paid | Prices, limits and introduction timing undecided |
+| Dictionary | Propose minimal format and provider-specific application |
+| Distribution | Propose local loading, alpha distribution and store-publication stages |
 
-これらをすべてユーザーへの質問にする必要はない。可逆的な技術選択は推奨案を示して設計を進め、商品範囲・料金・投稿挙動など意味が変わる判断は未決と明記する。
+Not every item requires a user question. Proceed with recommended reversible technical choices, while marking product scope, pricing, posting behavior and other consequential open decisions explicitly.
 
-## 12. Codexへ最初に求める成果物
+## 12. First requested design deliverables
 
-今回の引き継ぎは**設計着手**を目的とする。いきなり将来構想を一括実装しない。
+This handoff starts design work; it does not request implementing all future concepts at once.
 
-1. 本書から読み取ったPoCの範囲と、実装へ持ち込まない範囲。
-2. 動画字幕、Composer、設定画面のUI案。
-3. 拡張の実行環境、音声取得、Provider、YouTube Adapterの構成。
-4. 入力更新・非同期結果・STALE・エラー・停止の状態設計。
-5. Providerごとの実現性と、最初に動かす組合せ・比較順。
-6. 未決事項についての推奨案と、判断が必要な項目。
-7. 段階的な実装計画、確認方法、計測項目。
+1. Understood PoC scope and exclusions.
+2. UI proposals for video captions, composer and settings.
+3. Extension runtimes, capture, providers and YouTube adapter architecture.
+4. Input revisions, asynchronous results, stale/error/stop states.
+5. Provider feasibility, first working combination and comparison order.
+6. Recommendations and decisions still needed.
+7. Staged implementation, checks and measurements.
 
-UIは実際に見て修正できる雛形を重視する。設計上の仮定と検証済み事項を区別し、動いていない部分を実装済みと表現しない。
+Prioritize a visible, editable UI prototype. Distinguish design assumptions from verified behavior; do not label non-working parts as implemented.

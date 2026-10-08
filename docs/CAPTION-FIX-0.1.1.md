@@ -1,5 +1,9 @@
 # Caption initialization fix — 0.1.1
 
+[日本語](CAPTION-FIX-0.1.1.jp.md) · [Current README](../README.md)
+
+> Historical release note. The startup flow changed in 0.1.7: start directly from the toolbar popup on a new tab. Follow the current README for installation.
+
 The reported live page showed LISTENING but no captions. DOM inspection found an empty caption host without the positioning styles that successful initialization sets. This is consistent with partial initialization, but does not prove that speech recognition is delivering transcripts.
 
 The old content script inserted the host before initializing the view and did not check the CONFIG response. An initialization error left a connected host that prevented subsequent attempts. The new code validates settings, initializes detached views before attaching them, retries failed initialization, and ignores configuration responses after navigation. Capture now requires a ready overlay.

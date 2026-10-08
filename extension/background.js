@@ -35,13 +35,12 @@ async function start(tabId){
   if(!check.overlayReady)throw new Error(check.error||'Caption overlay is unavailable. Reload this YouTube page.');
   const config=await settings();const keys=(await chrome.storage.session.get('keys')).keys||{};
   const names={deepgram:'Deepgram',gemini:'Gemini',openai:'OpenAI',deepl:'DeepL',deepseek:'DeepSeek'};
-  if(config.sttProvider!=='demo'&&!keys[config.sttProvider])throw new Error(`Add your ${names[config.sttProvider]} API key in Settings.`);
-  if(config.captionMode!=='original'&&config.translationProvider!=='demo'&&!keys[config.translationProvider])throw new Error(`Add your ${names[config.translationProvider]} API key in Settings.`);
+  if(!keys[config.sttProvider])throw new Error(`Add your ${names[config.sttProvider]} API key in Settings.`);
+  if(config.captionMode!=='original'&&!keys[config.translationProvider])throw new Error(`Add your ${names[config.translationProvider]} API key in Settings.`);
   await offscreen();
   const id=crypto.randomUUID();
-  // Demo never captures real audio.
-  let streamId=null;
-  if(config.sttProvider!=='demo'){
+  let streamId;
+  {
     try{streamId=await chrome.tabCapture.getMediaStreamId({targetTabId:tabId});}
     catch{throw new Error('Open the KeroTranslate toolbar icon on this YouTube tab and press Start captions in that popup. If another extension is capturing this tab, stop its capture first.');}
   }
@@ -49,7 +48,7 @@ async function start(tabId){
   await broadcast(tabId,{type:'CAPTURE_STATUS',status:'STARTING'});
   const reply=await chrome.runtime.sendMessage({target:'offscreen',type:'START',id,streamId,settings:config});
   if(!reply?.ok){await stop();throw new Error('Audio environment unavailable.');}
-  await chrome.action.setBadgeBackgroundColor({color:'#315d30'});await chrome.action.setBadgeText({text:config.sttProvider==='demo'?'DEMO':'ON'});
+  await chrome.action.setBadgeBackgroundColor({color:'#315d30'});await chrome.action.setBadgeText({text:'ON'});
 }
 function serial(action){const next=lifecycle.then(action);lifecycle=next.catch(()=>{});return next;}
 async function handle(m,sender){
@@ -77,7 +76,7 @@ async function handle(m,sender){
     const controller=new AbortController();pending.set(key,controller);
     try{
       const config=await settings(),keys=(await chrome.storage.session.get('keys')).keys||{};
-      const text=await translations.schedule({provider:config.translationProvider,signal:controller.signal,priority:1,intervalMs:config.translationProvider==='demo'?0:config.translationInterval,run:()=>translate({...m.request,signal:controller.signal},config,keys)});
+      const text=await translations.schedule({provider:config.translationProvider,signal:controller.signal,priority:1,intervalMs:config.translationInterval,run:()=>translate({...m.request,signal:controller.signal},config,keys)});
       return {text};
     }finally{if(pending.get(key)===controller)pending.delete(key);}
   }
@@ -91,7 +90,7 @@ async function handle(m,sender){
     try{
       const c=await capture();if(!c||c.id!==m.id)throw new Error('Caption session has ended.');
       const config=await settings(),keys=(await chrome.storage.session.get('keys')).keys||{};let usage={};
-      const text=await translations.schedule({provider:config.translationProvider,signal:controller.signal,priority:0,intervalMs:config.translationProvider==='demo'?0:config.translationInterval,run:()=>translate({text:m.request?.text,source:'auto',target:config.captionTarget,signal:controller.signal},config,keys,u=>{usage=u;})});
+      const text=await translations.schedule({provider:config.translationProvider,signal:controller.signal,priority:0,intervalMs:config.translationInterval,run:()=>translate({text:m.request?.text,source:'auto',target:config.captionTarget,signal:controller.signal},config,keys,u=>{usage=u;})});
       return {text,usage};
     }finally{if(captionPending.get(key)===controller)captionPending.delete(key);}
   }

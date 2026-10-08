@@ -1,22 +1,4 @@
 export class ProviderError extends Error {constructor(code,message){super(message);this.code=code;}}
-export const FIXTURES=[
-  ['今日も配信ありがとう！','Thanks for streaming today!'],
-  ['そのボス、強すぎる！','That boss is way too strong!'],
-  ['ナイス！今のすごかった！','Nice! That was amazing!'],
-  ['もう一回やってみよう！','Let’s give it another try!'],
-  ['みんな、聞こえてる？','Can everyone hear me?']
-];
-export async function demoTranslate({text,target,signal}){
-  await new Promise((resolve,reject)=>{
-    if(signal?.aborted)return reject(new DOMException('Aborted','AbortError'));
-    const abort=()=>{clearTimeout(t);reject(new DOMException('Aborted','AbortError'));};
-    const t=setTimeout(()=>{signal?.removeEventListener('abort',abort);resolve();},350);
-    signal?.addEventListener('abort',abort,{once:true});
-  });
-  const pair=FIXTURES.find(p=>p.includes(text.trim()));
-  if(!pair)throw new ProviderError('DEMO_ONLY','Demo supports the sample phrases only. Select an API provider in Settings for real translation.');
-  return pair[target==='ja'?0:1];
-}
 export async function geminiTranslate({text,source,target,signal,key,model,fetchImpl=fetch,onUsage=()=>{}}){
   if(!key)throw new ProviderError('AUTH','Gemini key missing. Add it in Settings.');
   if(!/^gemini-[a-z0-9.-]{1,70}$/.test(model))throw new ProviderError('MODEL','Invalid Gemini model ID.');
@@ -82,7 +64,6 @@ export async function translate(request,settings,keys={},onUsage=()=>{}){
   if(!['ja','en','auto'].includes(request.source)||!['ja','en'].includes(request.target))throw new ProviderError('LANGUAGE','Unsupported language.');
   const signal=AbortSignal.any([request.signal||new AbortController().signal,AbortSignal.timeout(20000)]);
   try{
-    if(settings.translationProvider==='demo')return await demoTranslate({...request,signal});
     const common={...request,signal,onUsage};
     switch(settings.translationProvider){
       case 'gemini':return await geminiTranslate({...common,key:keys.gemini,model:settings.model});

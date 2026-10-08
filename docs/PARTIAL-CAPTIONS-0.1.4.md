@@ -1,13 +1,17 @@
 # Partial captions — 0.1.4
 
-STTのpartialを受け取った時点で、薄色＋「…」の原文字幕を表示します。同じ区間の修正はその場で置き換え、finalになったら通常色・「…」なしに切り替えます。翻訳APIを呼ぶのはfinal後だけです。
+[日本語](PARTIAL-CAPTIONS-0.1.4.jp.md) · [Current installation instructions](../README.md)
 
-前の翻訳と原文の組を表示したまま、新しい認識テキストを区切り線付きの別行に表示します。各区間に連番を付け、前の翻訳が遅れて届いても新しいpartial/finalを消さないようにしました。同じ区間の翻訳到着時には認識中の行を統合します。既存のサイズ・行数設定はこの行にも適用します。
+Historical release note. The standalone preview described here was removed in Beta 0.1.10.
 
-表示モードがOriginal + MTLまたはOriginal onlyの場合にpartialが見えます。MTL onlyでは原文を表示しません。翻訳待ち中の表示維持、翻訳後の読了時間、停止時の消去も維持しています。
+As soon as STT produces a partial result, show the original caption in a dim color with an ellipsis. Revisions replace the same segment in place. A final result switches to normal color without the ellipsis. Only final results trigger translation API requests.
 
-単体プレビューでは、partial → partial更新 → final → 翻訳という段階的なサンプルを再生します。サンプルの時間は演出用で、実際のレイテンシーを表すものではありません。
+Keep the previous original/translation pair visible and show newer recognition on a separate row with a divider. Segment sequence numbers prevent late translations from erasing newer partial or final recognition. When that segment's translation arrives, merge its provisional row into the translated caption. Existing size and line-count settings also apply to the provisional row.
 
-今回の変更は表示とイベント伝達です。VAD終端調整、後続文マージ、固有名詞の正規化、区間別レイテンシー表示は今後の候補であり、未実装です。
+Partial text is visible in **Original + MTL** and **Original only**. **MTL only** hides it. Pending-translation retention, reading time after translation and immediate clearing on Stop are preserved.
 
-検証: partial/finalの見分け、同一区間の更新、遅れた翻訳と新しいpartialの併存、再開、停止後の応答破棄、partialでは翻訳を呼ばないことをオフラインテストで確認。更新後の実配信表示は未確認。
+The former standalone preview played partial → revised partial → final → translation samples. Their timing was illustrative, not a latency measurement.
+
+This change concerns display and event delivery. Configurable VAD endpoints, merging subsequent utterances, entity normalization and per-stage latency display remain future work.
+
+Offline validation covered partial/final differentiation, updates within a segment, coexistence of delayed translations and newer partials, restart behavior, discarding responses after Stop, and avoiding translation requests for partials. Live display after the update was not yet verified.

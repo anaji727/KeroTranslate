@@ -1,98 +1,87 @@
-# 受入・実機検証ノート
+# Acceptance and real-browser testing
 
-2026-10-07 JST 更新。実配信・実API結果を記入するための手順。架空の性能値を置かない。
+[日本語の原文](ACCEPTANCE.jp.md) · [README](../README.md)
 
-## 実施済み
+Updated October 8, 2026 for Beta 0.1.10. Record actual streaming and API results here; do not invent performance figures. The Japanese counterpart preserves the previous testing record, with the beta changes noted at the top.
 
-Nodeによる93件のテストが成功。構文とmanifestエントリーファイルの存在を確認。単体HTMLにまとめたJavaScriptも構文検査済み。
+## Evidence and its limits
 
-追加でローカルHTTPサーバーを起動し、Windowsでルートパス末尾の区切りが重複して正常ファイルまで403になる判定を修正。HTML、CSS、全依存JavaScriptのHTTP 200とContent-Type、存在しないファイルの404、公開ルート外へのアクセスの403を確認した。これはHTTP配信の確認であり、ブラウザー表示・操作の検証とは区別する。
+Offline Node tests cover stale responses, slow back-translation, IME input, direction changes, manual MTL edits, stage-specific retries, empty input and disposal; HTTP error classification and missing keys; draft/emote preservation and ambiguous inputs; socket stop/races/backpressure; secret/configuration boundaries; late audio events after Stop; and the shared translation queue. Beta 0.1.10 adds checks for retiring Demo adapters, migration of old provider settings and missing-key rejection before capture. Syntax and manifest entry files are checked separately.
 
-テスト対象は、版更新後の旧応答、遅いre-MTL、IME、方向変更、手動MTL編集、工程別再試行、空入力、dispose、HTTPエラー分類、長期APIキーのURL非混入（DeepL Voiceの短期接続トークンは公式方式に従いURLに含む）、鍵の欠落、模擬下書き/Emote保持、曖昧な入力欄の拒否、Socketの停止・遅延応答・backpressure、content scriptからの秘密取得/設定変更の拒否、停止後の音声イベント破棄。
+Before the Demo preview was retired, its bundled JavaScript was syntax-checked. Its local HTTP server was also checked for successful HTML/CSS/JS delivery and MIME types, 404 responses, and rejection of paths outside the public root. A Windows trailing-separator bug was fixed. These were HTTP checks, not evidence of rendered UI or browser interaction.
 
-ユーザー環境で字幕表示を確認済み。現行YouTube入力欄のcontenteditableが空属性であることを読み取り確認し、検出条件を修正した。partial表示、字幕サイズ・表示時間、INSERT修正、メインパネルの開始停止は実装・オフラインテスト済みで、更新後の実機通し確認は未完了。MockはChrome API/YouTube/Providerそのものを検証しない。開発側から実投稿は行っていない。
+The user reported working captions. Read-only inspection found YouTube's chat input uses an empty `contenteditable` attribute, and detection was adjusted. Partial display, caption size/retention, INSERT fixes and capture controls have implementation and offline coverage. Updated end-to-end browser checks are still incomplete. Mocks do not validate Chrome, YouTube or provider services themselves. No real chat message was sent during development.
 
-## 優先する確認順
+## Recommended validation order
 
-1. Chromeへ読み込み、拡張エラーがないこと。設定画面とデモUIが表示されること。対象タブのツールバーポップアップ内でStart captions → Stopまで完結し、メインパネルへ戻らず開始できること。
-2. YouTubeの通常ライブ画面でチャットComposerの位置、入力欄、Emoteが使えること。
-3. 投稿せず、空/文字あり/Emoteだけの下書きにOriginal/MTLをINSERTする。候補の投稿は不要。
-4. 各翻訳Providerのキーで短い1文を翻訳し、方向変更・連続入力・MTL編集・IME・再翻訳を確認。
-5. Deepgram / OpenAI / DeepL Voiceでそれぞれまず10秒、次に1分の音声取得を試す。配信音声が途切れないこと。Stop後にChromeの取得表示が消えること。
-6. 取得中の遷移、タブ閉鎖、回線切断、設定変更、キー削除、workerの再起動を確認。
-7. 日英混在の10分評価へ進む。Provider管理画面で請求量を照合。
+1. Load the unpacked beta using Chrome Developer mode. Check extension errors, the settings page, frog icon and Beta version. Confirm there is no Demo selection or Try sample button. Without keys, Start captions must explain which key is missing and must not start capture.
+2. With configured keys, start and stop entirely in the target tab's toolbar popup. Check the main panel placement and access to the native input and emotes.
+3. Without posting, INSERT Original/MTL into empty, text-only and emote-only drafts. Confirm replacement prompts.
+4. With each translation provider, test a short sentence, direction changes, rapid typing, MTL edits, IME and back-translation.
+5. With each STT provider, first capture ten seconds, then one minute. Stream audio must stay audible; Chrome's capture indicator must disappear after Stop.
+6. During capture, test navigation, closing the tab, network loss, saving settings, deleting keys and worker restart.
+7. Evaluate ten minutes of mixed-language audio and reconcile usage with provider dashboards.
 
-## 受入一覧
+## Acceptance matrix
 
-| ID | 条件 | 現在の証拠 / 残作業 |
+| ID | Requirement | Evidence / remaining work |
 |---|---|---|
-| A01 | MTLと対応するre-MTL | 状態テスト済み / 実翻訳待ち |
-| A02 | Originalを挿入、送信ゼロ | 模擬DOM済み / 現行YouTube待ち |
-| A03 | 最新MTLを挿入、送信ゼロ | 状態＋模擬DOM済み / 実機待ち |
-| A04 | re-MTL読取専用、INSERTなし | ソース確認済み / 画面・アクセシビリティ待ち |
-| A05 | 古い結果が最新を上書きしない | 非同期テスト済み / 実通信でも確認 |
-| A06 | IME途中で翻訳しない | 状態テスト済み / 日本語IMEで確認 |
-| A07 | エラーを分け、原文保持、再試行 | HTTPと状態テスト済み / 実キー不正・429等待ち |
-| A08 | STT/翻訳の独立切替 | STTは3実Provider、翻訳は4実Providerを独立選択 / 新Providerの実接続・品質比較は未検証 |
-| A09 | 聴きながら音声字幕 | ユーザーから字幕表示成功の報告 / 音声出力と長時間動作を確認 |
-| A10 | 表示3種、位置9種 | サイズ・時間・partial含め実装 / 全アンカー・1/2行・幅の目視待ち |
-| A11 | 停止・遷移で古い結果が混入しない | worker/Socketのmockテスト済み / 取得中遷移・終了確認待ち |
-| A12 | 既存下書きを黙って消さない | 模擬DOM済み / Emote付き実機確認 |
-| A13 | 純正閲覧・投稿・Emoteを保持 | 未検証。本人操作で投稿する通常動線は必要な場合に本人が確認 |
-| A14 | 不要な送信/収集なし | ソースと秘密境界テスト済み / Networkとstorageの実機監査待ち |
-| A15 | 日英混在の品質・遅延・費用 | 未実測 |
+| A01 | MTL and its corresponding re-MTL | State tests; live translation pending |
+| A02 | Insert Original without sending | Mock DOM; current YouTube validation pending |
+| A03 | Insert only current MTL without sending | State/mock DOM; real-browser validation pending |
+| A04 | Read-only re-MTL, no INSERT | Source checked; visual/accessibility check pending |
+| A05 | Old results never overwrite new input | Async tests; check with real traffic too |
+| A06 | No translation during IME composition | State tests; Japanese IME check pending |
+| A07 | Distinct errors, preserved original, retry | HTTP/state tests; real bad-key/quota checks pending |
+| A08 | Independent STT/translation choices | Three STT and four translation adapters; live comparisons pending |
+| A09 | Hear stream audio while reading captions | User reported captions; audio routing/long sessions need checks |
+| A10 | Three display modes, nine positions | Implemented including size/time/partials; inspect all anchors and line/width settings |
+| A11 | No stale results after Stop/navigation | Worker/socket mocks; live navigation/close pending |
+| A12 | Never silently erase a draft | Mock DOM; test real emote drafts |
+| A13 | Preserve native reading/posting/emotes | Not fully verified; the user can check ordinary manual posting if needed |
+| A14 | No unwanted transfer or collection | Source and secret-boundary tests; browser Network/storage audit pending |
+| A15 | Mixed-language quality, latency and cost | Not measured |
 
-## 評価素材
+## Evaluation material
 
-利用する権利のある配信・音声で、英語のみ、日本語のみ、文ごとの切替、文中切替、固有名詞、Emote、BGM/歌/笑い、無音を用意する。原文と訳文の正確さを人が確認する。再翻訳が自然という理由だけで合格にしない。
+Use audio you have permission to use: English-only, Japanese-only, switches between and within sentences, names, emotes, music, singing, laughter and silence. Have a person evaluate meaning. Natural back-translation alone is not a pass criterion.
 
-## 計測
+## Measurements
 
-Composerは現在、翻訳開始からre-MTL完了までの経過時間をREADYで表示する。650ms debounceは含まない。typing終了からの体感時間は別途記録する。
+The composer displays elapsed time from translation start to completed re-MTL when READY. This excludes the 650 ms input debounce. Record perceived time from the end of typing separately.
 
-OpenAI STTのWebRTC送信バイト・STTトークンは集計していません。DeepL翻訳は返却された課金文字数をbilledCharactersに分け、tokensへ換算しません。新Providerの実機手順は[Provider追加ノート](PROVIDERS-0.1.6.md)を参照してください。
-
-Incomingはoffscreen内で音声経過秒、送信バイト、確定segment数、翻訳試行数、翻訳エラー数、返却された入力/出力（thinking含む）tokens、最後の翻訳時間を集計し、5秒ごとにセッション内へ保存する。テキスト本体とキーは指標に含めない。
-
-拡張workerの開発者ツールで以下の読み取りができる。
+The offscreen process collects elapsed audio seconds, bytes sent where available, final segments, translation attempts/errors, returned input/output tokens (including reported thinking tokens), billed characters and the last translation duration. It updates session storage every five seconds. Metrics exclude transcript text and keys. Read them in the extension worker's developer tools:
 
 ```javascript
 await chrome.storage.session.get('metrics')
 ```
 
-これはIncomingの最新セッションの途中集計であり、最後の5秒未満・中断されたリクエストの利用量・Composerのtoken費用は網羅しない。請求メーターではない。Composer利用量と中断分はProvider管理画面で照合する。STT確定までの遅延、百分位、比較グラフはまだ自動計測していない。
+These are partial aggregates for the latest incoming session. They omit the final interval shorter than five seconds, some aborted-request usage and composer costs. OpenAI WebRTC byte/STT token counts are not measured. DeepL characters are not converted to tokens. This is not a billing meter; reconcile with provider dashboards. Automatic STT-final latency, percentiles and comparison graphs are not implemented.
 
-評価時は次を記録する：
-
-| 項目 | 方法 |
+| Metric | Method |
 |---|---|
-| 音声→STT確定 | 権利のある素材に時刻の基準を置き、発話末尾から確定表示まで計測 |
-| STT→MTL | 最終segment受信から訳表示。字幕が飛んだ回数も併記 |
-| 入力→MTL→re-MTL | 30以上の例文でp50/p95。debounce有無を分ける |
-| INSERTまでの操作 | 方向変更・修正・既存下書きありでクリック数と所要時間 |
-| 料金 | 使用開始前後のProvider管理画面差分。モデル、言語、課金条件も記録 |
-| 正確さ | 意味欠落、反転、固有名詞誤り、敬語・距離感のズレを人が分類 |
+| Audio → final STT | Timestamp permitted material; measure utterance end to confirmed display |
+| STT → MTL | Final segment reception to translation display; also count skipped segments |
+| Input → MTL → re-MTL | At least 30 sentences, p50/p95, distinguishing inclusion/exclusion of debounce |
+| Effort to INSERT | Click count and time with direction changes, edits and existing drafts |
+| Cost | Before/after provider dashboard usage, with model, language and billing conditions |
+| Accuracy | Human classification of omitted/reversed meaning, names and tone/politeness errors |
 
-停止後も、すでに送信済みの処理がProvider側で請求される可能性は残る。UIで結果を捨てた件数と課金対象件数は同一とは限らない。
+Sent work may remain billable after Stop. Discarded UI results are not equivalent to unbilled requests.
 
-## 制約
+## Constraints
 
-- 最新字幕を優先する初版なので、全文トランスクリプト・全発話字幕の保証はない。
-- 無認識は15秒でNO_SPEECHを表示。音量から判定する無音検出は未実装。
-- リプレイ、Shorts、埋め込み、popout、全画面は正式対応を確認していない。
-- `execCommand('insertText')` とYouTubeのprivate DOMに依存する。DOM変更時は無関係な欄へ書かず失敗させる。
-- 字幕領域やComposerはページに依存するため、YouTubeの実機統合テストが必要。
-- 日本語200文字と絵文字の扱いは初版ではJS string lengthによる保守的制限。YouTubeの実際のカウントとの完全一致は保証しない。
+- Favoring the latest caption means no guarantee of a full transcript or every utterance.
+- NO_SPEECH means no recognition for 15 seconds, not amplitude-based silence detection. OpenAI's separate local endpointing heuristic does not change that meaning.
+- Replays, Shorts, embedded players, pop-outs and fullscreen do not have confirmed formal support.
+- Chat insertion depends on `execCommand('insertText')` and YouTube's private DOM. Unknown/ambiguous inputs fail rather than writing into unrelated fields.
+- Both the overlay and composer require real YouTube integration testing.
+- The conservative 200-unit JavaScript string limit is not guaranteed to match YouTube's emoji counting.
 
+## Checks added in earlier releases
 
-## 0.1.7の追加確認
+**0.1.7:** Offline checks cover popup controls, tab-scoped status, not stopping another tab, and recovery from transient/detached overlays. Actual Chrome tab-audio permission and first-start behavior need real-browser validation. See [Chrome tabCapture](https://developer.chrome.com/docs/extensions/reference/api/tabCapture).
 
-ポップアップの開始・停止とタブ別表示、別タブを誤停止しないこと、オーバーレイの一時失敗・切り離しからの復旧をオフラインテスト済み。実Chromeでのタブ音声権限と初回開始は未検証。Chromeの制約は[公式tabCapture資料](https://developer.chrome.com/docs/extensions/reference/api/tabCapture)を参照。
+**0.1.8:** Worker integration tests overlap caption MTL, comment MTL and re-MTL and verify ordering and a maximum of one simultaneous HTTP translation per provider. Other checks cover queued cancellation, rejecting pending work after 429, and numeric/date Retry-After. Live request/token quotas remain unverified.
 
-## 0.1.8の追加確認
-
-字幕翻訳・コメントMTL・re-MTLを重ねるworker統合テストで、送信順と最大同時HTTP数1を確認。待機中の取消、429後の全待機リクエストの拒否と送信抑止、Retry-Afterの秒数・日付形式も検証。実APIの回数枠・トークン枠での通し確認は未実施。
-
-実機では同じ翻訳Providerで字幕動作中にコメントを入力し、MTL編集によるre-MTLも試す。新設定の送信間隔に従うこと、字幕の待機表示、Stop・設定変更で待機仕事が送信されないことを確認。429を意図的に大量リクエストで起こす必要はありません。
-
-lastTranslationMsには0.1.8から共有キューでの待ち時間も含みます。requestsは字幕側の翻訳試行数なので、送信前の取消・クールダウンによる拒否も含み、実HTTP件数や請求件数とは一致しません。
+In the browser, enter a comment and edit MTL while captions use the same provider. Check spacing, retained captions and cancellation on Stop/settings changes. Do not deliberately flood an API to trigger 429. Since 0.1.8, `lastTranslationMs` includes queue waiting; `requests` counts caption translation attempts, including cancellation/rejection before HTTP, not billable requests.

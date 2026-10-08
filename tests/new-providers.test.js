@@ -44,5 +44,5 @@ test('dispatcher selects each provider without falling back and propagates cance
 test('settings retain independent model choices and reject URL-shaped models',()=>{
   const s=sanitizeSettings({sttProvider:'openai',translationProvider:'deepseek',openaiModel:'gpt-4.1-nano',deepseekModel:'deepseek-v4-pro',deeplPlan:'pro'});
   assert.equal(s.sttProvider,'openai');assert.equal(s.deepseekModel,'deepseek-v4-pro');assert.equal(s.openaiModel,'gpt-4.1-nano');assert.equal(s.deeplPlan,'pro');
-  const bad=sanitizeSettings({sttProvider:'deepseek',openaiModel:'https://evil/key',deeplPlan:'https://evil'});assert.equal(bad.sttProvider,'demo');assert.equal(bad.deeplPlan,'free');assert.equal(bad.openaiModel,'gpt-4.1-mini');
+  const bad=sanitizeSettings({sttProvider:'deepseek',openaiModel:'https://evil/key',deeplPlan:'https://evil'});assert.equal(bad.sttProvider,'deepgram');assert.equal(bad.deeplPlan,'free');assert.equal(bad.openaiModel,'gpt-4.1-mini');
 });
