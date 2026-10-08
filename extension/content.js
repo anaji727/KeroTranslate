@@ -4,11 +4,23 @@
   ]);
   let config,composer,captions,captionHost,chatHost,lastUrl=location.href,queued=false,generation=0,mounting;
   const send=message=>chrome.runtime.sendMessage(message);
-  async function translate({signal,...request}){
-    const id=crypto.randomUUID();const abort=()=>send({type:'CANCEL',id}).catch(()=>{});
+  const progress=new Map();
+  async function translateBatch({signal,onProgress,...request}){
+    const id=crypto.randomUUID();let timer;
+    const abort=()=>send({type:'CANCEL',id}).catch(()=>{});
     if(signal.aborted)throw new DOMException('Aborted','AbortError');
-    signal.addEventListener('abort',abort,{once:true});
-    try{const result=await send({type:'TRANSLATE',id,request});if(signal.aborted)throw new DOMException('Aborted','AbortError');if(!result?.ok)throw new Error(result?.error||'Extension unavailable. Reload this page.');return result.text;}finally{signal.removeEventListener('abort',abort);}
+    progress.set(id,onProgress);
+    let rejectWait;
+    const cancelled=new Promise((_resolve,reject)=>{rejectWait=reject;});
+    const onAbort=()=>{abort();rejectWait(new DOMException('Aborted','AbortError'));};
+    signal.addEventListener('abort',onAbort,{once:true});
+    const timeout=new Promise((_resolve,reject)=>{timer=setTimeout(()=>{abort();reject(new Error('Comment translation timed out. Use Retry all to restart.'));},120000);});
+    try{
+      const result=await Promise.race([send({type:'TRANSLATE_COMMENT',id,request}),cancelled,timeout]);
+      if(signal.aborted)throw new DOMException('Aborted','AbortError');
+      if(!result?.ok)throw new Error(result?.error||'Extension unavailable. Reload this page.');
+      return {mtl:result.mtl,back:result.back};
+    }finally{clearTimeout(timer);progress.delete(id);signal.removeEventListener('abort',onAbort);}
   }
   function cleanup(){generation++;composer?.dispose();composer=null;captions?.dispose();captions=null;chatHost?.remove();captionHost?.remove();chatHost=null;captionHost=null;send({type:'NAVIGATED'}).catch(()=>{});}
   async function initialize(){
@@ -20,7 +32,7 @@
       const renderer=document.querySelector('yt-live-chat-message-input-renderer');
       if(renderer&&(!chatHost?.isConnected)){
         composer?.dispose();const host=document.createElement('div');host.style.cssText='flex:none;max-height:55vh;overflow:auto;margin:0 8px 8px;';
-        const view=mountComposer(host,{settings:config,translate,insert:insertDraft,openSettings:()=>send({type:'OPEN_SETTINGS'}),captureAction:action=>send({type:action==='start'?'PANEL_START':'PANEL_STOP'})});
+        const view=mountComposer(host,{settings:config,translateBatch,insert:insertDraft,openSettings:()=>send({type:'OPEN_SETTINGS'}),captureAction:action=>send({type:action==='start'?'PANEL_START':'PANEL_STOP'}),timingAction:timings=>send({type:'PANEL_TIMING',timings})});
         renderer.before(host);chatHost=host;composer=view;
         send({type:'PANEL_STATUS'}).then(r=>{if(composer===view&&r.ok)view.captureStatus(r);}).catch(()=>{});
       }
@@ -43,12 +55,14 @@
     return {ok:false,live:!!livePlayer(),overlayReady:false,error:failed?'Caption overlay could not initialize. If the extension was just updated, reload YouTube once, then use Start captions in the toolbar popup.':'Caption overlay is not ready yet. Wait for the video to load and try Start captions again.'};
   }
   chrome.runtime.onMessage.addListener((message,_sender,respond)=>{
+    if(message.type==='COMPOSER_PROGRESS')progress.get(message.id)?.({mtl:message.mtl});
     if(message.type==='CHECK_LIVE'||message.type==='TEST_OVERLAY'){
       prepareOverlay(message.type==='TEST_OVERLAY').then(respond);return true;
     }
     if(message.type==='CAPTION'){const version=generation;mount().then(()=>{if(version===generation)captions?.show(message.cue);}).catch(()=>{});}
     if(message.type==='CAPTURE_STATUS'&&['STOPPED','ERROR','STARTING'].includes(message.status)){generation++;captions?.clear();}
     if(message.type==='CAPTURE_STATUS')composer?.captureStatus(message);
+    if(message.type==='TIMING_CHANGED'){config={...config,...message.timings};composer?.refreshTiming(message.timings);captions?.configure(config);}
     if(message.type==='CONFIG_CHANGED'){config=message.settings;composer?.refresh(config);captions?.configure(config);}
   });
   const observer=new MutationObserver(()=>{if(!queued){queued=true;setTimeout(()=>{queued=false;mount().catch(()=>{});},400);}});

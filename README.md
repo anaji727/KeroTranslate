@@ -8,7 +8,7 @@ Follow a stream with original and translated captions. Draft a comment, translat
 
 **INSERT only fills the chat input. It never sends a message. You review and post it yourself.**
 
-Current version: **Beta 0.1.12** (October 8, 2026).
+Current version: **Beta 0.1.13** (October 9, 2026).
 
 ## Install the beta
 
@@ -97,9 +97,23 @@ The initial **Composer original language** setting is **English → Japanese**. 
 
 If YouTube already has a draft, choose **Replace draft** or **Keep draft**. Repeated insertion does not duplicate identical text. The insertion limit is 200 JavaScript string units, a conservative limit that may differ from YouTube's counting of emoji. Translation waits during Japanese IME composition, and stale responses cannot replace newer input.
 
+## Quick timing controls
+
+The header's **−** button minimizes the panel; **+** restores it. Drafts, translations and active captions continue while minimized. This view preference lasts until the panel is remounted or the page is reloaded.
+
+**Retry all** is always present below re-MTL and becomes available when Original contains text (except during IME composition). It cancels the previous comment operation and restarts both translation and meaning check from the current Original, replacing any manually edited MTL. Use it if either stage fails or appears stuck. It does not bypass provider cooldowns. An unresponsive comment operation times out after two minutes. Error messages in the panel and popup stay visible for at least one second before subsequent updates replace them.
+
+Use **Request gap** and **Caption hold** at the upper-right of the main panel to adjust request spacing and post-translation caption retention. They wrap to the next row in narrow chat panels. Changes save automatically and are shared with Settings and other YouTube tabs. Defaults are one second and five seconds.
+
+These controls keep capture running and preserve comment drafts and edited translations. Request spacing updates queued work without interrupting an active request or bypassing a provider cooldown. Caption hold changes apply the next time a caption reading timer starts.
+
 ## Shared request scheduling
 
 Caption translation, comment translation and back-translation share a background queue per translation provider. Only one translation HTTP request runs at a time per provider. Waiting comments have priority; an active caption request finishes first. Speech recognition streams are separate from this queue.
+
+Each comment's translation and back-translation now hold one queue slot together, with the configured request gap between HTTP calls. Captions cannot slip between these stages. Editing MTL runs only its meaning check; Retry all restarts both stages. Cancelled or superseded results cannot overwrite the current draft.
+
+After other caption translation failures, recognition continues while new translation attempts pause for 1–10 seconds, increasing with consecutive failures. New speech during the pause is skipped for translation; fresh segments resume afterward. Only the active and newest waiting caption are retained. The shared queue also rejects excess waiting work without resetting healthy jobs or provider cooldowns. No overflow-count reset setting is required for the browser timer failure fixed in this release.
 
 **Minimum interval between translation requests** defaults to one second, at most approximately 60 starts per minute. Choices are 0.5 / 1 / 2 / 4 / 6 / 12 seconds. A comment normally requires two requests, sharing the same allowance as captions. Start with one second for shorter queue waits. If rate-limit errors occur, increase the interval to 2–4 seconds, or 6–12 seconds for stricter limits, according to your provider account. A shorter interval can increase request volume and cost; it does not speed up the provider itself or guarantee quota availability. Saved settings are preserved on update; existing users can select one second manually in Settings.
 
@@ -165,6 +179,8 @@ node tools/check.js
 English is the primary documentation language. Each document links to a corresponding `.jp.md` Japanese version. Historical notes describe their original releases; use this README for current installation instructions.
 
 ## Changelog
+
+- **Beta 0.1.13:** Fix browser timer invocation causing `Illegal invocation` and stalled translation queues. Keep comment translation and back-translation together; add permanent Retry all, caption failure backoff, minimum one-second error visibility, panel minimization and live Request gap / Caption hold controls. Preserve drafts, saved settings and provider cooldowns.
 
 - **Beta 0.1.12:** Default translation request spacing to one second and caption retention after translation to five seconds. Preserve saved preferences and add tuning advice.
 

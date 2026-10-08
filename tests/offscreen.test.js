@@ -24,3 +24,21 @@ test('content frames and other extension pages cannot start offscreen capture',(
   assert.equal(message({type:'START',id:'bad',settings:config},{id:'test',tab:{id:1}}),undefined);
   assert.equal(message({type:'START',id:'bad',settings:config},{id:'test',url:'chrome-extension://test/options.html'}),undefined);
 });
+
+
+test('caption failures shed new work during cooldown then recover with new speech',async()=>{
+  const originalNow=Date.now,originalSocket=globalThis.WebSocket,send=chrome.runtime.sendMessage;let now=100000,socket,requests=0;
+  Date.now=()=>now;
+  Object.defineProperty(globalThis,'navigator',{configurable:true,value:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){}}]};}}}});
+  globalThis.WebSocket=class{readyState=1;bufferedAmount=0;constructor(){socket=this;queueMicrotask(()=>this.onopen?.());}send(){}close(){}};
+  chrome.runtime.sendMessage=async m=>{sent.push(m);if(m.type==='PRIVATE_CONFIG')return {ok:true,keys:{deepgram:'fake'}};if(m.type==='CAPTION_TRANSLATE'){requests++;if(requests===1)return {ok:false,code:'RATE_OR_QUOTA',retryAfterMs:3000,error:'limited'};if(requests===3)return {ok:false,code:'NETWORK',error:'temporary failure'};return {ok:true,text:'recovered'};}return {ok:true};};
+  const speech=async id=>{socket.onmessage({data:JSON.stringify({type:'Results',start:id,is_final:true,channel:{alternatives:[{transcript:`speech ${id}`}]}})});await turn();};
+  try{
+    message({type:'START',id:'recovery',streamId:'fake',settings:config});await turn();
+    await speech(1);assert.equal(requests,1);await speech(2);assert.equal(requests,1);assert.ok(sent.some(m=>m.type==='AUDIO_CUE'&&m.cue.id==='2'&&m.cue.phase==='error'&&!m.cue.pendingNext));
+    now+=3000;await speech(3);assert.equal(requests,2);assert.ok(sent.some(m=>m.type==='AUDIO_CUE'&&m.cue.id==='3'&&m.cue.translation==='recovered'));
+    await speech(4);assert.equal(requests,3);await speech(5);assert.equal(requests,3);
+    now+=1000;await speech(6);assert.equal(requests,4);assert.ok(sent.some(m=>m.type==='AUDIO_CUE'&&m.cue.id==='6'&&m.cue.translation==='recovered'));
+    message({type:'STOP'});await speech(7);assert.equal(requests,4);
+  }finally{message({type:'STOP'});Date.now=originalNow;globalThis.WebSocket=originalSocket;chrome.runtime.sendMessage=send;}
+});

@@ -25,13 +25,23 @@ test('manual MTL editing regenerates only re-MTL',async()=>{
 test('stale MTL cannot be manually promoted to current',async()=>{
   const {c}=controlled();c.input('new');c.editMtl('old translation');assert.equal(c.state.mtl,'');assert.equal(c.canInsert('mtl'),false);c.dispose();
 });
-test('error retains original and retries the failed back-translation stage',async()=>{
+test('Retry all retains original and restarts both stages after back-translation failure',async()=>{
   const {c,calls}=controlled();c.input('original');const task=c.run();calls[0].resolve('translation');await turn();calls[1].reject(new Error('quota'));await task;assert.equal(c.state.original,'original');assert.equal(c.state.phase,'ERROR');assert.equal(c.canInsert('original'),true);assert.equal(c.canInsert('mtl'),false);
-  const retry=c.retry();assert.equal(calls[2].request.text,'translation');calls[2].resolve('back');await retry;assert.equal(c.state.phase,'READY');c.dispose();
+  const retry=c.retry();assert.equal(calls[2].request.text,'original');calls[2].resolve('new translation');await turn();assert.equal(calls[3].request.text,'new translation');calls[3].resolve('back');await retry;assert.equal(c.state.phase,'READY');c.dispose();
 });
 test('empty input cancels requests and clears all derived text',async()=>{
   const {c,calls}=controlled();c.input('original');const task=c.run();c.input('');calls[0].resolve('late');await task;assert.equal(c.state.phase,'EMPTY');assert.equal(c.state.mtl,'');assert.equal(c.canInsert('original'),false);c.dispose();
 });
 test('disposal prevents updates and more requests',async()=>{
   const {c,calls}=controlled();c.input('original');const task=c.run();c.dispose();calls[0].resolve('late');await task;await c.run();assert.equal(calls.length,1);assert.equal(c.state.mtl,'');
+});
+
+test('batched composer progress, active retry and stale replies preserve the latest revision',async()=>{
+  const calls=[];const c=new Composer({debounce:100000,translateBatch:request=>{const d=deferred();calls.push({...d,request});return d.promise;}});
+  c.input('original');const first=c.run();assert.equal(calls.length,1);assert.equal(calls[0].request.backOnly,false);
+  calls[0].request.onProgress({mtl:'first translation'});assert.equal(c.state.phase,'BACK_TRANSLATING');
+  const retry=c.retry();assert.equal(calls[0].request.signal.aborted,true);assert.equal(calls[1].request.text,'original');assert.equal(calls[1].request.backOnly,false);
+  calls[0].request.onProgress({mtl:'stale'});calls[0].resolve({mtl:'stale',back:'stale'});await first;assert.notEqual(c.state.mtl,'stale');
+  calls[1].resolve({mtl:'new',back:'checked'});await retry;assert.equal(c.state.phase,'READY');assert.equal(c.state.back,'checked');
+  c.editMtl('manual edit');const edited=c.run(true);assert.equal(calls[2].request.backOnly,true);assert.equal(calls[2].request.mtl,'manual edit');calls[2].resolve({mtl:'manual edit',back:'checked edit'});await edited;assert.equal(c.state.mtl,'manual edit');c.dispose();
 });

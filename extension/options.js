@@ -14,3 +14,10 @@ q('settings').onsubmit=async e=>{
   q('message').textContent=r.ok?'Settings and API keys saved on this device. Open the KeroTranslate toolbar popup on a YouTube Live tab and press Start captions.':r.error;
 };
 q('clear').onclick=async()=>{const r=await chrome.runtime.sendMessage({type:'CLEAR_KEYS'});if(r.ok){for(const name of keyNames)q(name).value='';q('message').textContent='All API keys deleted. Capture and pending requests stopped.';}else q('message').textContent=r.error;};
+
+// Reflect quick timing changes from the main panel without overwriting other edits.
+chrome.storage.onChanged.addListener((changes,area)=>{
+  if(area!=='local'||!changes.settings?.newValue)return;
+  const {oldValue={},newValue}=changes.settings;
+  for(const field of ['translationInterval','captionDuration'])if(newValue[field]!==oldValue[field])q(field).value=newValue[field];
+});

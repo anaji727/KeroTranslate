@@ -108,3 +108,61 @@ test('saved credentials survive worker and browser-session restart without expos
   await import('../extension/background.js?after-key-deletion');
   assert.deepEqual((await message({type:'PRIVATE_CONFIG'},options)).keys,{});
 });
+
+test('panel timing patches persist and broadcast without stopping capture or touching private settings',async()=>{
+  const query=chrome.tabs.query;chrome.tabs.query=async()=>[{id:42},{id:99}];
+  const keys={gemini:'private-key'};data.local.keys=keys;data.local.settings={translationProvider:'openai',source:'ja',captionSize:150,translationInterval:1000,captionDuration:5};
+  const active={id:'keep-running',tabId:42,status:'LISTENING'};data.session.capture=active;const before=sent.length;
+  try{
+    const results=await Promise.all([message({type:'PANEL_TIMING',timings:{translationInterval:4000}}),message({type:'PANEL_TIMING',timings:{captionDuration:15}})]);
+    assert.ok(results.every(r=>r.ok));assert.equal(data.local.settings.translationInterval,4000);assert.equal(data.local.settings.captionDuration,15);
+    assert.equal(data.local.settings.translationProvider,'openai');assert.equal(data.local.settings.source,'ja');assert.equal(data.local.settings.captionSize,150);
+    assert.deepEqual(data.local.keys,keys);assert.deepEqual(data.session.capture,active);
+    const notifications=sent.slice(before);assert.equal(notifications.length,4);assert.ok(notifications.every(m=>m.type==='TIMING_CHANGED'));
+    assert.deepEqual(notifications.at(-1).timings,{translationInterval:4000,captionDuration:15});
+    assert.ok(!JSON.stringify([results,notifications]).includes('private-key'));
+  }finally{chrome.tabs.query=query;delete data.session.capture;data.local.settings={};}
+});
+test('panel timing RPC rejects other senders, unsupported fields and invalid values',async()=>{
+  const before=JSON.stringify(data.local);
+  for(const sender of [options,audio,{...content,url:'https://www.youtube.com/watch?v=test'},{...content,id:'foreign'},{...content,url:'https://example.com/'}]){
+    assert.equal((await message({type:'PANEL_TIMING',timings:{captionDuration:5}},sender)).ok,false);
+  }
+  for(const timings of [undefined,null,[],{}, {captionDuration:6},{captionDuration:'5'},{translationInterval:0},{translationProvider:'openai'},{keys:{gemini:'bad'}},{captionDuration:5,source:'ja'}]){
+    assert.equal((await message({type:'PANEL_TIMING',timings})).ok,false);
+  }
+  assert.equal(JSON.stringify(data.local),before);
+});
+
+
+test('comment transaction holds the provider lane through back-translation and reports progress',async()=>{
+  data.local.settings={translationProvider:'gemini',translationInterval:500};data.local.keys={gemini:'fake'};data.session.capture={id:'atomic',tabId:42};
+  const oldFetch=globalThis.fetch,send=chrome.tabs.sendMessage,order=[],progress=[];let release;
+  globalThis.fetch=async(_url,o)=>{const text=JSON.parse(o.body).contents[0].parts[0].text;order.push(text);if(text==='original')await new Promise(r=>release=r);return {ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:`translated ${text}`}]}}]})};};
+  chrome.tabs.sendMessage=async(tab,m,frame)=>{progress.push({tab,m,frame});};
+  try{
+    const comment=message({type:'TRANSLATE_COMMENT',id:'atomic-comment',request:{text:'original',source:'en',target:'ja',backOnly:false}});
+    for(let i=0;i<50;i++)await Promise.resolve();assert.equal(typeof release,'function');
+    const caption=message({type:'CAPTION_TRANSLATE',id:'atomic',requestId:'waiting',request:{text:'caption'}},audio);
+    release();const result=await comment;assert.equal(result.ok,true);assert.equal(result.back,'translated translated original');assert.equal((await caption).ok,true);
+    assert.deepEqual(order,['original','translated original','caption']);
+    assert.deepEqual(progress[0],{tab:42,m:{type:'COMPOSER_PROGRESS',id:'atomic-comment',mtl:'translated original'},frame:{frameId:2}});
+    const edited=await message({type:'TRANSLATE_COMMENT',id:'edited',request:{text:'original',mtl:'edited MTL',source:'en',target:'ja',backOnly:true}});
+    assert.equal(edited.ok,true);assert.equal(edited.mtl,'edited MTL');assert.equal(order.at(-1),'edited MTL');assert.equal(order.length,4);
+  }finally{globalThis.fetch=oldFetch;chrome.tabs.sendMessage=send;delete data.session.capture;data.local.settings={};}
+});
+
+test('cancelling between comment stages releases the lane for a complete retry',async()=>{
+  data.local.settings={translationProvider:'deepseek',translationInterval:500};data.local.keys={deepseek:'fake'};
+  const oldFetch=globalThis.fetch,send=chrome.tabs.sendMessage,order=[];let reached;const progress=new Promise(r=>reached=r);
+  globalThis.fetch=async(_url,o)=>{const text=JSON.parse(o.body).messages.at(-1).content;order.push(text);return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:'result'}}]})};};
+  chrome.tabs.sendMessage=async(_tab,m)=>{if(m.type==='COMPOSER_PROGRESS')reached();};
+  try{
+    const request={text:'cancel me',source:'ja',target:'en',backOnly:false};
+    const first=message({type:'TRANSLATE_COMMENT',id:'cancel-batch',request});await progress;
+    await message({type:'CANCEL',id:'cancel-batch'});assert.equal((await first).ok,false);assert.equal(order.length,1);
+    assert.equal((await message({type:'TRANSLATE_COMMENT',id:'retry-batch',request:{...request,text:'retry me'}})).ok,true);
+    assert.deepEqual(order,['cancel me','retry me','result']);
+    for(const sender of [options,audio,{...content,url:'https://example.com/'}])assert.equal((await message({type:'TRANSLATE_COMMENT',id:'bad',request},sender)).ok,false);
+  }finally{globalThis.fetch=oldFetch;chrome.tabs.sendMessage=send;data.local.settings={};}
+});

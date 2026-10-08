@@ -7,7 +7,7 @@ export async function queuedTranslate({sessionId,text,target,signal},onUsage=()=
   try{
     const result=await chrome.runtime.sendMessage({type:'CAPTION_TRANSLATE',id:sessionId,requestId,request:{text,target}});
     if(signal.aborted)throw new DOMException('Aborted','AbortError');
-    if(!result?.ok){const error=new Error(result?.error||'Caption translation unavailable.');error.code=result?.code;throw error;}
+    if(!result?.ok){const error=new Error(result?.error||'Caption translation unavailable.');error.code=result?.code;error.retryAfterMs=result?.retryAfterMs;throw error;}
     onUsage(result.usage||{});return result.text;
   }finally{signal.removeEventListener('abort',abort);}
 }

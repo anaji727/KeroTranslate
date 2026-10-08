@@ -2,11 +2,11 @@
 
 [日本語の原文](ACCEPTANCE.jp.md) · [README](../README.md)
 
-Updated October 8, 2026 for Beta 0.1.11. Record actual streaming and API results here; do not invent performance figures. The Japanese counterpart preserves the previous testing record, with the beta changes noted at the top.
+Updated October 9, 2026 for Beta 0.1.13. Record actual streaming and API results here; do not invent performance figures. The Japanese counterpart preserves the previous testing record, with the beta changes noted at the top.
 
 ## Evidence and its limits
 
-Offline Node tests cover stale responses, slow back-translation, IME input, direction changes, manual MTL edits, stage-specific retries, empty input and disposal; HTTP error classification and missing keys; draft/emote preservation and ambiguous inputs; socket stop/races/backpressure; secret/configuration boundaries; late audio events after Stop; and the shared translation queue. Beta 0.1.10 adds checks for retiring Demo adapters, migration of old provider settings and missing-key rejection before capture. Beta 0.1.11 adds simulated browser/worker restart, persistent-key deletion, legacy migration, local-key precedence and storage-failure checks. All 99 offline tests pass. Syntax and manifest entry files are checked separately.
+Offline Node tests cover stale responses, slow back-translation, IME input, direction changes, manual MTL edits, full comment retries, empty input and disposal; HTTP error classification and missing keys; draft/emote preservation and ambiguous inputs; socket stop/races/backpressure; secret/configuration boundaries; late audio events after Stop; and the shared translation queue. Beta 0.1.10 adds checks for retiring Demo adapters, migration of old provider settings and missing-key rejection before capture. Beta 0.1.11 adds simulated browser/worker restart, persistent-key deletion, legacy migration, local-key precedence and storage-failure checks. All 119 offline tests pass. Syntax and manifest entry files are checked separately.
 
 Before the Demo preview was retired, its bundled JavaScript was syntax-checked. Its local HTTP server was also checked for successful HTML/CSS/JS delivery and MIME types, 404 responses, and rejection of paths outside the public root. A Windows trailing-separator bug was fixed. These were HTTP checks, not evidence of rendered UI or browser interaction.
 
@@ -85,3 +85,16 @@ Sent work may remain billable after Stop. Discarded UI results are not equivalen
 **0.1.8:** Worker integration tests overlap caption MTL, comment MTL and re-MTL and verify ordering and a maximum of one simultaneous HTTP translation per provider. Other checks cover queued cancellation, rejecting pending work after 429, and numeric/date Retry-After. Live request/token quotas remain unverified.
 
 In the browser, enter a comment and edit MTL while captions use the same provider. Check spacing, retained captions and cancellation on Stop/settings changes. Do not deliberately flood an API to trigger 429. Since 0.1.8, `lastTranslationMs` includes queue waiting; `requests` counts caption translation attempts, including cancellation/rejection before HTTP, not billable requests.
+
+## Main-panel timing controls (0.1.13)
+
+Offline checks cover timing-only permission and value validation, concurrent partial updates, persistence and broadcasts without stopping capture, preserving comment drafts/edits, failed-save recovery, updating the existing overlay, rescheduling queued requests and preserving provider cooldowns. Local rendering of the actual panel module was checked at 650 px and 320 px. Browser automation cannot click inside its closed shadow root, so selection behavior is covered by offline UI tests; real YouTube interaction with the updated controls remains pending.
+
+
+## Queue recovery and panel controls (0.1.13, October 9)
+
+A local browser run of the production queue reproduced `TypeError: Illegal invocation` after the first job. Calling a native browser timer as a queue instance method supplied an invalid receiver. Wrapping the native timer calls fixed the reproduction: both consecutive jobs finished. This is browser evidence for the scheduler defect, not an end-to-end provider test.
+
+The 119 passing offline tests include atomic comment/back-translation ordering, cancellation between stages, full retry while active, matching progress messages, stale-response suppression, a two-minute comment timeout, bounded overflow recovery, caption quota/transient-error cooldown and resumption, minimum one-second notices, timing settings and minimization preserving state. No overflow-count reset control was added; resetting the lane would discard valid work and could bypass quota cooldowns.
+
+Local screenshots verify the actual panel at 650 px and 320 px, including the header minimize button, timing selectors and permanent Retry all. Closed shadow DOM prevents the browser tool from clicking these controls; their interaction checks use the offline UI harness. Updated Chrome/YouTube capture, actual provider limits, manual MTL edits during live captions and recovery after real service errors remain pending. No real API or chat-posting requests were made for these checks.

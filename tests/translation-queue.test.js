@@ -40,3 +40,42 @@ test('retry-after seconds/date are honored, absent headers use 30 seconds',()=>{
 test('request interval defaults to one second and accepts only supported choices',()=>{
   assert.equal(sanitizeSettings().translationInterval,1000);assert.equal(sanitizeSettings({translationInterval:'12000'}).translationInterval,12000);assert.equal(sanitizeSettings({translationInterval:-1}).translationInterval,1000);
 });
+
+test('live interval changes reschedule waiting work without interrupting an active request',async()=>{
+  const h=harness(),order=[];let finish;
+  const first=h.queue.schedule({provider:'gemini',intervalMs:4000,run:()=>{order.push('first');return new Promise(r=>finish=r);}});await flush();
+  const next=h.queue.schedule({provider:'gemini',intervalMs:4000,run:()=>order.push('next')});
+  await h.tick(500);h.queue.updateInterval(1000);await h.tick(500);assert.deepEqual(order,['first']);
+  finish();await first;await next;assert.deepEqual(order,['first','next']);
+  const third=h.queue.schedule({provider:'gemini',intervalMs:1000,run:()=>order.push('third')});
+  h.queue.updateInterval(6000);await h.tick(5999);assert.equal(order.length,2);await h.tick(1);await third;assert.equal(order.length,3);
+});
+test('changing the request interval never bypasses a provider cooldown',async()=>{
+  const h=harness();
+  await assert.rejects(h.queue.schedule({provider:'gemini',run:()=>{throw Object.assign(new Error('limit'),{code:'RATE_OR_QUOTA',retryAfterMs:5000});}}));await flush();
+  h.queue.updateInterval(500);await h.tick(1000);
+  await assert.rejects(h.queue.schedule({provider:'gemini',run:()=>assert.fail('cooldown bypassed')}),/4s/);
+});
+
+test('a comment transaction retains its lane for paced back-translation before queued captions',async()=>{
+  const h=harness(),order=[];let finish;
+  const batch=h.queue.schedule({provider:'gemini',intervalMs:1000,priority:1,run:async({nextRequest})=>{order.push('comment');await new Promise(r=>finish=r);await nextRequest();order.push('back');return 'done';}});await flush();
+  const caption=h.queue.schedule({provider:'gemini',intervalMs:1000,run:()=>order.push('caption')});finish();await flush();await h.tick(999);assert.deepEqual(order,['comment']);await h.tick(1);assert.equal(await batch,'done');assert.deepEqual(order,['comment','back']);await h.tick(1000);await caption;assert.deepEqual(order,['comment','back','caption']);
+});
+test('cancelling a batch while waiting for back-translation releases the lane',async()=>{
+  const h=harness(),controller=new AbortController();let backCalls=0;
+  const batch=h.queue.schedule({provider:'gemini',signal:controller.signal,intervalMs:1000,run:async({nextRequest})=>{await nextRequest();backCalls++;}});await flush();const rejected=assert.rejects(batch,e=>e.name==='AbortError');controller.abort();await rejected;await flush();
+  const next=h.queue.schedule({provider:'gemini',intervalMs:1000,run:()=>42});await h.tick(1000);assert.equal(await next,42);assert.equal(backCalls,0);
+});
+test('a failed job and overflow rejection do not poison later queued work',async()=>{
+  const h=harness();let fail;const failed=h.queue.schedule({provider:'gemini',intervalMs:0,run:()=>new Promise((_r,reject)=>fail=reject)});await flush();
+  const waiting=Array.from({length:50},(_,i)=>h.queue.schedule({provider:'gemini',intervalMs:0,run:()=>i}));
+  await assert.rejects(h.queue.schedule({provider:'gemini',run:()=>assert.fail('overflow sent')}),e=>e.code==='BUSY');
+  const rejected=assert.rejects(failed,/network/);fail(new Error('network'));await rejected;assert.deepEqual(await Promise.all(waiting),Array.from({length:50},(_,i)=>i));assert.equal(await h.queue.schedule({provider:'gemini',intervalMs:0,run:()=>99}),99);
+});
+test('default timers never invoke native browser timer functions with the queue as receiver',async t=>{
+  const realSet=setTimeout,realClear=clearTimeout;
+  t.mock.method(globalThis,'setTimeout',function(fn,ms){assert.equal(this,undefined);return realSet(fn,ms);});
+  t.mock.method(globalThis,'clearTimeout',function(id){assert.equal(this,undefined);return realClear(id);});
+  const queue=new TranslationQueue();assert.equal(await queue.schedule({provider:'gemini',intervalMs:10,run:()=>1}),1);assert.equal(await queue.schedule({provider:'gemini',intervalMs:10,run:()=>2}),2);
+});

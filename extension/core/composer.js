@@ -1,8 +1,8 @@
 import {DEFAULTS} from './settings.js';
 // Framework-independent state machine. A revision covers source, direction and settings.
 export class Composer {
-  constructor({translate,onChange=()=>{},debounce=650}) {
-    Object.assign(this,{translate,onChange,debounce,revision:0,composing:false,disposed:false});
+  constructor({translate,translateBatch,onChange=()=>{},debounce=650}) {
+    Object.assign(this,{translate,translateBatch,onChange,debounce,revision:0,composing:false,disposed:false});
     this.state={original:'',mtl:'',back:'',phase:'EMPTY',source:DEFAULTS.source,target:DEFAULTS.target,error:'',elapsed:0};
   }
   emit(){this.onChange({...this.state});}
@@ -31,6 +31,12 @@ export class Composer {
     const current=()=>!this.disposed&&version===this.revision&&!controller.signal.aborted;
     this.state.error='';
     try{
+      if(this.translateBatch){
+        this.state.phase=backOnly?'BACK_TRANSLATING':'TRANSLATING';this.state.back='';this.emit();
+        const result=await this.translateBatch({text:original,source,target,backOnly,mtl:this.state.mtl,signal:controller.signal,onProgress:({mtl})=>{if(current()){this.state.mtl=mtl;this.state.phase='BACK_TRANSLATING';this.emit();}}});
+        if(!current())return;
+        this.state.mtl=result.mtl;this.state.back=result.back;this.state.elapsed=Math.round(performance.now()-start);this.state.phase='READY';this.emit();return;
+      }
       if(!backOnly){
         this.state.phase='TRANSLATING';this.emit();
         const mtl=await this.translate({text:original,source,target,signal:controller.signal});
@@ -40,9 +46,9 @@ export class Composer {
       const back=await this.translate({text:this.state.mtl,source:target,target:source,signal:controller.signal});
       if(!current())return;
       this.state.back=back;this.state.elapsed=Math.round(performance.now()-start);this.state.phase='READY';this.emit();
-    }catch(error){if(!current())return;this.failedBackOnly=this.state.phase==='BACK_TRANSLATING';this.state.error=error.message||'Translation failed';this.state.phase='ERROR';this.emit();}
+    }catch(error){if(!current())return;this.state.error=error.message||'Translation failed';this.state.phase='ERROR';this.emit();}
   }
-  retry(){return this.run(!!this.failedBackOnly);}
+  retry(){return this.run(false);}
   canInsert(kind){return kind==='original'?!!this.state.original.trim():this.state.phase==='READY'&&!!this.state.mtl.trim();}
   dispose(){this.disposed=true;this.invalidate();}
 }

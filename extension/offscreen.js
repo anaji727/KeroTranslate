@@ -27,13 +27,16 @@ async function cue(s,{text,final,id,sequence:providerSequence}){
   finally{s.translating=false;}
 }
 async function translateCue(s,{id,text,sequence}){
+  // Drop obsolete work while a provider is cooling down; keep recognizing audio.
+  if(Date.now()<(s.retryAt||0)){s.metrics.skippedSegments=(s.metrics.skippedSegments||0)+1;notify(s,'AUDIO_CUE',{cue:{id,sequence,phase:'error',original:text,translation:'',pendingNext:!!s.queued}});return;}
   const controller=s.controller=new AbortController();const begin=performance.now();s.metrics.requests++;
   try{
     const out=await queuedTranslate({sessionId:s.id,text,target:s.settings.captionTarget,signal:controller.signal},u=>{s.metrics.inputTokens+=(u.promptTokenCount||0);s.metrics.outputTokens+=(u.candidatesTokenCount||0)+(u.thoughtsTokenCount||0);s.metrics.billedCharacters=(s.metrics.billedCharacters||0)+(u.billedCharacters||0);});
     if(active!==s||controller.signal.aborted)return;
+    s.failures=0;s.retryAt=0;
     s.metrics.lastTranslationMs=Math.round(performance.now()-begin);
     notify(s,'AUDIO_CUE',{cue:{id,sequence,phase:'translated',original:text,translation:out,pendingNext:!!s.queued}});
-  }catch(e){if(active===s&&!controller.signal.aborted){s.metrics.errors++;status(s,'TRANSLATION_ERROR',e.message);notify(s,'AUDIO_CUE',{cue:{id,sequence,phase:'error',original:text,translation:'',pendingNext:!!s.queued}});}}
+  }catch(e){if(active===s&&!controller.signal.aborted){s.metrics.errors++;s.failures=(s.failures||0)+1;s.retryAt=Date.now()+(e.code==='RATE_OR_QUOTA'?Math.max(1000,Number(e.retryAfterMs)||30000):Math.min(10000,1000*2**Math.min(4,s.failures-1)));status(s,'TRANSLATION_ERROR',e.message);notify(s,'AUDIO_CUE',{cue:{id,sequence,phase:'error',original:text,translation:'',pendingNext:!!s.queued}});}}
 }
 async function begin(s,streamId){
   try{

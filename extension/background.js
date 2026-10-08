@@ -63,12 +63,24 @@ async function handle(m,sender){
     if(m.type==='PANEL_STOP')await serial(async()=>{if((await capture())?.tabId===tabId)await stop();});
     const c=await capture();return {status:c?.tabId===tabId?c.status:'STOPPED',error:c?.tabId===tabId?c.error||'':''};
   }
+  if(m.type==='PANEL_TIMING'){
+    if(!youtube(sender)||!/^https:\/\/www\.youtube\.com\/live_chat(?:\?|$|\/)/.test(sender.url))throw new Error('Open the live chat panel.');
+    const choices={translationInterval:[500,1000,2000,4000,6000,12000],captionDuration:[5,7,10,15,20]};
+    if(!m.timings||typeof m.timings!=='object'||Array.isArray(m.timings)||!Object.keys(m.timings).length||Object.entries(m.timings).some(([key,value])=>!Object.hasOwn(choices,key)||!choices[key].includes(value)))throw new Error('Unsupported timing setting.');
+    return serial(async()=>{
+      const config={...await settings(),...m.timings};await chrome.storage.local.set({settings:config});
+      if('translationInterval' in m.timings)translations.updateInterval(config.translationInterval);
+      const timings={translationInterval:config.translationInterval,captionDuration:config.captionDuration};
+      for(const tab of await chrome.tabs.query({url:'https://www.youtube.com/*'}))await broadcast(tab.id,{type:'TIMING_CHANGED',timings});
+      return {timings};
+    });
+  }
   if(m.type==='NAVIGATED'){
     for(const [key,item]of pending)if(key.startsWith(`${sender.tab?.id}:${sender.frameId}:`)){item.abort();pending.delete(key);}
     const c=await capture();if(sender.frameId===0&&c?.tabId===sender.tab?.id)await serial(stop);return {};
   }
   if(m.type==='CANCEL'){pending.get(ns(sender,m.id))?.abort();return {};}
-  if(m.type==='TRANSLATE'){
+  if(m.type==='TRANSLATE'||m.type==='TRANSLATE_COMMENT'){
     if(!youtube(sender)||!/^https:\/\/www\.youtube\.com\/live_chat(?:\?|$|\/)/.test(sender.url))throw new Error('Composer translation is only available in live chat.');
     if(typeof m.id!=='string'||m.id.length>80)throw new Error('Invalid request.');
     const key=ns(sender,m.id),prefix=ns(sender,'');
@@ -77,6 +89,18 @@ async function handle(m,sender){
     const controller=new AbortController();pending.set(key,controller);
     try{
       const config=await settings(),keys=(await chrome.storage.local.get('keys')).keys||{};
+      if(m.type==='TRANSLATE_COMMENT'){
+        const request=m.request||{},source=request.source,target=request.target;
+        if(!['en','ja'].includes(source)||target!==(source==='en'?'ja':'en')||typeof request.text!=='string'||!request.text.trim()||request.text.length>2000||typeof request.backOnly!=='boolean'||(request.backOnly&&(typeof request.mtl!=='string'||!request.mtl.trim()||request.mtl.length>2000)))throw new Error('Invalid comment translation request.');
+        return await translations.schedule({provider:config.translationProvider,signal:controller.signal,priority:1,intervalMs:config.translationInterval,run:async({nextRequest})=>{
+          const mtl=request.backOnly?request.mtl:await translate({text:request.text,source,target,signal:controller.signal},config,keys);
+          if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
+          await chrome.tabs.sendMessage(sender.tab.id,{type:'COMPOSER_PROGRESS',id:m.id,mtl},{frameId:sender.frameId}).catch(()=>{});
+          if(!request.backOnly)await nextRequest();
+          const back=await translate({text:mtl,source:target,target:source,signal:controller.signal},config,keys);
+          return {mtl,back};
+        }});
+      }
       const text=await translations.schedule({provider:config.translationProvider,signal:controller.signal,priority:1,intervalMs:config.translationInterval,run:()=>translate({...m.request,signal:controller.signal},config,keys)});
       return {text};
     }finally{if(pending.get(key)===controller)pending.delete(key);}
@@ -102,13 +126,13 @@ async function handle(m,sender){
     if(!result?.ok)throw new Error(result?.error||'Open a YouTube Live watch page and reload it.');
     return {overlayReady:true};
   }
-  if(m.type==='SAVE_SETTINGS'){
-    const config=sanitizeSettings(m.settings);await serial(stop);
+  if(m.type==='SAVE_SETTINGS')return serial(async()=>{
+    const config=sanitizeSettings(m.settings);await stop();
     for(const c of pending.values())c.abort();pending.clear();
     await chrome.storage.local.set({settings:config});
     if(m.keys)await chrome.storage.local.set({keys:Object.fromEntries(['gemini','deepgram','openai','deepl','deepseek'].map(name=>[name,String(m.keys[name]||'').trim().slice(0,500)]))});
     for(const tab of await chrome.tabs.query({url:'https://www.youtube.com/*'}))await broadcast(tab.id,{type:'CONFIG_CHANGED',settings:config});return {};
-  }
+  });
   if(m.type==='CLEAR_KEYS'){await serial(stop);for(const c of pending.values())c.abort();pending.clear();await chrome.storage.local.remove('keys');await chrome.storage.session.remove('keys');return {};}
   if(m.type==='START_CAPTURE'){await serial(()=>start(m.tabId));return {};}
   if(m.type==='STOP_CAPTURE'){await serial(async()=>{if(m.tabId===undefined||(await capture())?.tabId===m.tabId)await stop();});return {};}
@@ -123,7 +147,7 @@ async function handle(m,sender){
 }
 chrome.runtime.onMessage.addListener((m,sender,reply)=>{
   if(m.target==='offscreen')return;
-  handle(m,sender).then(result=>reply({ok:true,...result}),error=>reply({ok:false,error:error.message||'Operation failed.',code:error.code}));return true;
+  handle(m,sender).then(result=>reply({ok:true,...result}),error=>reply({ok:false,error:error.message||'Operation failed.',code:error.code,retryAfterMs:error.retryAfterMs}));return true;
 });
 chrome.tabs.onRemoved.addListener(tabId=>{serial(async()=>{if((await capture())?.tabId===tabId)await stop();});for(const [key,c]of pending)if(key.startsWith(`${tabId}:`)){c.abort();pending.delete(key);}});
 chrome.tabs.onUpdated.addListener((tabId,change)=>{if(change.url||change.status==='loading')serial(async()=>{if((await capture())?.tabId===tabId)await stop();});});
