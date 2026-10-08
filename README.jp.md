@@ -12,7 +12,7 @@ YouTube Liveの音声字幕と、自分のコメント翻訳を支援するChrom
 
 ## ダウンロード
 
-- [Chrome拡張ZIP](artifacts/KeroTranslate-Extension.zip)
+- [Chrome拡張ZIPをダウンロード](https://github.com/anaji727/KeroTranslate/raw/refs/heads/main/artifacts/KeroTranslate-Extension.zip)
 - [リポジトリ](https://github.com/anaji727/KeroTranslate)
 
 このリリースではDemoモード・固定例文ボタン・単体プレビューを削除しました。音声認識と翻訳には、ご自身のAPIキーが必要です。

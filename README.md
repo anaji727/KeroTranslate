@@ -14,7 +14,7 @@ Current version: **Beta 0.1.11** (October 8, 2026).
 
 **KeroTranslate is still in beta. For this release, enable Chrome's Developer mode and load the unpacked extension using the steps below.**
 
-1. Download the [Chrome extension ZIP](artifacts/KeroTranslate-Extension.zip) and extract it to a folder you will keep. Alternatively, use the repository's `extension/` folder.
+1. Download the [Download Chrome extension ZIP](https://github.com/anaji727/KeroTranslate/raw/refs/heads/main/artifacts/KeroTranslate-Extension.zip) and extract it to a folder you will keep. Alternatively, use the repository's `extension/` folder.
 2. Open `chrome://extensions` in Chrome 116 or later.
 3. Enable **Developer mode** in the upper-right corner.
 4. Click **Load unpacked** and select the folder that directly contains `manifest.json`.
