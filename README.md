@@ -8,7 +8,7 @@ Follow a stream with original and translated captions. Draft a comment, translat
 
 **INSERT only fills the chat input. It never sends a message. You review and post it yourself.**
 
-Current version: **Beta 0.1.10** (October 8, 2026).
+Current version: **Beta 0.1.11** (October 8, 2026).
 
 ## Install the beta
 
@@ -32,9 +32,11 @@ Chrome requires you to invoke the extension on the target tab before tab audio c
 1. Stop captions, then replace the files in the folder Chrome currently loads.
 2. Click **Reload** for KeroTranslate in `chrome://extensions`.
 3. Reload the YouTube page as well.
-4. Re-enter API keys in Settings, save, and restart captions from the toolbar popup.
+4. Restart captions from the toolbar popup. Saved API keys are retained in the same Chrome profile and extension installation.
 
-**Keys use session storage and are cleared when the extension reloads or Chrome exits.** Saving settings also stops the current audio session. If you move the installation folder, load the new folder in Chrome.
+**Saved API keys survive Chrome restarts and extension reloads.** They are stored locally in this Chrome profile, not synced to other devices. Use **Delete all API keys** in Settings to remove them. Removing the extension or clearing its data removes saved keys. Saving settings still stops the current audio session. Keep the same unpacked installation folder when updating; loading another folder may create a separate extension installation.
+
+When upgrading from 0.1.10 or earlier, any remaining session keys are migrated. If the old version's session keys were already cleared during the update, enter and save them once in the new version.
 
 Saved language preferences are preserved. Old `demo` provider selections are normalized to Deepgram/Gemini; configure the corresponding keys or select different providers before use.
 
@@ -57,7 +59,7 @@ The adapters added in 0.1.6 remain experimental: their request/response handling
 - OpenAI speech recognition shows partial text before finalization. Its experimental local endpointing commits after about 600 ms of quiet, or at approximately eight seconds of continuous sound. This is an amplitude heuristic; music and quiet speech can affect it. The thresholds are not user-configurable yet.
 - DeepL's API Free/Pro selection controls text translation, not Voice eligibility. Voice requests source transcription only; translation is a separate request.
 - DeepSeek is available for text translation only. The adapter disables Thinking and accepts only completed response content.
-- Settings show fields for the selected providers. Switching providers preserves other keys for the current session. **Delete all API keys** clears them together.
+- Settings show fields for the selected providers. Switching providers preserves other saved keys. **Delete all API keys** clears them together.
 
 ## Live captions
 
@@ -114,14 +116,14 @@ This addresses concurrency and bursts, not daily quotas, token limits or other a
 | Prompt to open the toolbar icon | Invoke the extension on the current tab and start from its popup |
 | NO_SPEECH | No recognition results have arrived for 15 seconds; this does not measure actual silence |
 | INSERT unavailable | Check sign-in, chat permissions and input availability; YouTube DOM changes can affect detection |
-| Missing key after an update | Re-enter it in Settings; do not paste keys into chat or issues |
+| Missing key after an update | Check that you updated the same installation in the same Chrome profile. Upgrading from session-only versions may require one final entry; save it in Settings |
 | Old Demo settings | Select real providers and configure their keys; Demo was removed in Beta 0.1.10 |
 
 **Test overlay is a display diagnostic, not a Demo provider or a translation mode.**
 
 ## Keys and data
 
-- Keys are held in `chrome.storage.session`, restricted to trusted extension contexts. They are not returned to content scripts or placed in YouTube's DOM. This is not persistent encrypted storage.
+- Keys are held in `chrome.storage.local`, restricted to trusted extension contexts. They are not returned to content scripts or placed in YouTube's DOM, and are not sent to Chrome Sync. Local extension storage is not an encrypted credential vault. Capture state and usage metrics remain session-only.
 - Tab audio goes to your selected Deepgram, OpenAI or DeepL speech provider. Comment text, translations and caption transcripts go to the selected translation provider.
 - KeroTranslate has no separate collection server, analytics SDK or translation-history storage.
 - Deepgram requests include `mip_opt_out=true`. Data policies, free allowances and charges depend on each provider and your agreement.
@@ -161,6 +163,8 @@ node tools/check.js
 English is the primary documentation language. Each document links to a corresponding `.jp.md` Japanese version. Historical notes describe their original releases; use this README for current installation instructions.
 
 ## Changelog
+
+- **Beta 0.1.11:** Persist API keys locally across Chrome restarts and extension reloads. Migrate remaining legacy session keys, retain trusted-context access restrictions, and remove saved credentials with Delete all API keys.
 
 - **Beta 0.1.10:** Remove Demo providers, sample controls and standalone preview distribution. Default to Deepgram/Gemini with API-key requirements. Publish English-first documentation with Japanese counterparts and beta Developer mode installation instructions.
 - **Beta 0.1.9:** Default comment translation to English → Japanese; replace the panel icon with the green-and-white frog; replace LOCAL PoC labels with the beta version synchronized during packaging.

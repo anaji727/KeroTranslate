@@ -1,9 +1,10 @@
+import {initializeKeyStorage} from './core/key-storage.js';
 import {sanitizeSettings} from './core/settings.js';
 import {translate} from './core/providers.js';
 import {TranslationQueue} from './core/translation-queue.js';
 const translations=new TranslationQueue(),captionPending=new Map();
 const pending=new Map();let lifecycle=Promise.resolve();
-const ready=Promise.all([chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'}),chrome.storage.session.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'})]);
+const ready=initializeKeyStorage(chrome.storage);
 const trusted=sender=>sender.id===chrome.runtime.id&&sender.url?.startsWith(chrome.runtime.getURL(''));
 const youtube=sender=>sender.id===chrome.runtime.id&&sender.tab&&/^https:\/\/www\.youtube\.com\/(watch|live_chat)(\?|$|\/)/.test(sender.url||'');
 const ns=(sender,id)=>`${sender.tab?.id}:${sender.frameId}:${id}`;
@@ -33,7 +34,7 @@ async function start(tabId){
   if(!check)throw new Error('KeroTranslate is not connected to this page. Reload YouTube once after updating the extension, then start from the toolbar popup.');
   if(!check.live)throw new Error('A live player is not ready. Wait for the live video to load, then try Start captions again.');
   if(!check.overlayReady)throw new Error(check.error||'Caption overlay is unavailable. Reload this YouTube page.');
-  const config=await settings();const keys=(await chrome.storage.session.get('keys')).keys||{};
+  const config=await settings();const keys=(await chrome.storage.local.get('keys')).keys||{};
   const names={deepgram:'Deepgram',gemini:'Gemini',openai:'OpenAI',deepl:'DeepL',deepseek:'DeepSeek'};
   if(!keys[config.sttProvider])throw new Error(`Add your ${names[config.sttProvider]} API key in Settings.`);
   if(config.captionMode!=='original'&&!keys[config.translationProvider])throw new Error(`Add your ${names[config.translationProvider]} API key in Settings.`);
@@ -75,7 +76,7 @@ async function handle(m,sender){
     for(const [k,c]of pending)if(k.startsWith(prefix)){c.abort();pending.delete(k);}
     const controller=new AbortController();pending.set(key,controller);
     try{
-      const config=await settings(),keys=(await chrome.storage.session.get('keys')).keys||{};
+      const config=await settings(),keys=(await chrome.storage.local.get('keys')).keys||{};
       const text=await translations.schedule({provider:config.translationProvider,signal:controller.signal,priority:1,intervalMs:config.translationInterval,run:()=>translate({...m.request,signal:controller.signal},config,keys)});
       return {text};
     }finally{if(pending.get(key)===controller)pending.delete(key);}
@@ -89,12 +90,12 @@ async function handle(m,sender){
     const controller=new AbortController();captionPending.set(key,controller);
     try{
       const c=await capture();if(!c||c.id!==m.id)throw new Error('Caption session has ended.');
-      const config=await settings(),keys=(await chrome.storage.session.get('keys')).keys||{};let usage={};
+      const config=await settings(),keys=(await chrome.storage.local.get('keys')).keys||{};let usage={};
       const text=await translations.schedule({provider:config.translationProvider,signal:controller.signal,priority:0,intervalMs:config.translationInterval,run:()=>translate({text:m.request?.text,source:'auto',target:config.captionTarget,signal:controller.signal},config,keys,u=>{usage=u;})});
       return {text,usage};
     }finally{if(captionPending.get(key)===controller)captionPending.delete(key);}
   }
-  if(m.type==='PRIVATE_CONFIG')return {settings:await settings(),keys:(await chrome.storage.session.get('keys')).keys||{}};
+  if(m.type==='PRIVATE_CONFIG')return {settings:await settings(),keys:(await chrome.storage.local.get('keys')).keys||{}};
   if(m.type==='STATUS')return {capture:await capture(),settings:await settings(),metrics:(await chrome.storage.session.get('metrics')).metrics||{}};
   if(m.type==='TEST_OVERLAY'){
     const result=await chrome.tabs.sendMessage(m.tabId,{type:'TEST_OVERLAY'},{frameId:0}).catch(()=>null);
@@ -105,10 +106,10 @@ async function handle(m,sender){
     const config=sanitizeSettings(m.settings);await serial(stop);
     for(const c of pending.values())c.abort();pending.clear();
     await chrome.storage.local.set({settings:config});
-    if(m.keys)await chrome.storage.session.set({keys:Object.fromEntries(['gemini','deepgram','openai','deepl','deepseek'].map(name=>[name,String(m.keys[name]||'').trim().slice(0,500)]))});
+    if(m.keys)await chrome.storage.local.set({keys:Object.fromEntries(['gemini','deepgram','openai','deepl','deepseek'].map(name=>[name,String(m.keys[name]||'').trim().slice(0,500)]))});
     for(const tab of await chrome.tabs.query({url:'https://www.youtube.com/*'}))await broadcast(tab.id,{type:'CONFIG_CHANGED',settings:config});return {};
   }
-  if(m.type==='CLEAR_KEYS'){await serial(stop);for(const c of pending.values())c.abort();pending.clear();await chrome.storage.session.remove('keys');return {};}
+  if(m.type==='CLEAR_KEYS'){await serial(stop);for(const c of pending.values())c.abort();pending.clear();await chrome.storage.local.remove('keys');await chrome.storage.session.remove('keys');return {};}
   if(m.type==='START_CAPTURE'){await serial(()=>start(m.tabId));return {};}
   if(m.type==='STOP_CAPTURE'){await serial(async()=>{if(m.tabId===undefined||(await capture())?.tabId===m.tabId)await stop();});return {};}
   if(sender.url===chrome.runtime.getURL('offscreen.html'))return serial(async()=>{

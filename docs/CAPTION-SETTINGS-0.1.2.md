@@ -1,5 +1,7 @@
 # Caption timing and size — 0.1.2
 
+> **Since 0.1.11:** API keys persist locally across Chrome restarts and extension reloads. Session-only storage and re-entry instructions below describe the historical version. Delete all API keys removes saved credentials.
+
 [日本語](CAPTION-SETTINGS-0.1.2.jp.md) · [Current installation instructions](../README.md)
 
 Historical release note. The standalone preview mentioned below was removed in Beta 0.1.10.

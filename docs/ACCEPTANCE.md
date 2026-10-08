@@ -2,11 +2,11 @@
 
 [日本語の原文](ACCEPTANCE.jp.md) · [README](../README.md)
 
-Updated October 8, 2026 for Beta 0.1.10. Record actual streaming and API results here; do not invent performance figures. The Japanese counterpart preserves the previous testing record, with the beta changes noted at the top.
+Updated October 8, 2026 for Beta 0.1.11. Record actual streaming and API results here; do not invent performance figures. The Japanese counterpart preserves the previous testing record, with the beta changes noted at the top.
 
 ## Evidence and its limits
 
-Offline Node tests cover stale responses, slow back-translation, IME input, direction changes, manual MTL edits, stage-specific retries, empty input and disposal; HTTP error classification and missing keys; draft/emote preservation and ambiguous inputs; socket stop/races/backpressure; secret/configuration boundaries; late audio events after Stop; and the shared translation queue. Beta 0.1.10 adds checks for retiring Demo adapters, migration of old provider settings and missing-key rejection before capture. Syntax and manifest entry files are checked separately.
+Offline Node tests cover stale responses, slow back-translation, IME input, direction changes, manual MTL edits, stage-specific retries, empty input and disposal; HTTP error classification and missing keys; draft/emote preservation and ambiguous inputs; socket stop/races/backpressure; secret/configuration boundaries; late audio events after Stop; and the shared translation queue. Beta 0.1.10 adds checks for retiring Demo adapters, migration of old provider settings and missing-key rejection before capture. Beta 0.1.11 adds simulated browser/worker restart, persistent-key deletion, legacy migration, local-key precedence and storage-failure checks. All 99 offline tests pass. Syntax and manifest entry files are checked separately.
 
 Before the Demo preview was retired, its bundled JavaScript was syntax-checked. Its local HTTP server was also checked for successful HTML/CSS/JS delivery and MIME types, 404 responses, and rejection of paths outside the public root. A Windows trailing-separator bug was fixed. These were HTTP checks, not evidence of rendered UI or browser interaction.
 
@@ -19,7 +19,7 @@ The user reported working captions. Read-only inspection found YouTube's chat in
 3. Without posting, INSERT Original/MTL into empty, text-only and emote-only drafts. Confirm replacement prompts.
 4. With each translation provider, test a short sentence, direction changes, rapid typing, MTL edits, IME and back-translation.
 5. With each STT provider, first capture ten seconds, then one minute. Stream audio must stay audible; Chrome's capture indicator must disappear after Stop.
-6. During capture, test navigation, closing the tab, network loss, saving settings, deleting keys and worker restart.
+6. During capture, test navigation, closing the tab, network loss, saving settings, deleting keys and worker restart. Save keys, fully close and reopen Chrome, and confirm the same installation restores keys without starting capture. Reload the extension and verify again. Delete keys, restart Chrome and confirm they remain absent. Actual Chrome restart validation is pending; automated checks simulate storage lifetimes.
 7. Evaluate ten minutes of mixed-language audio and reconcile usage with provider dashboards.
 
 ## Acceptance matrix

@@ -11,6 +11,6 @@ const labels=['Top left','Top center','Top right','Middle left','Middle center',
 q('settings').onsubmit=async e=>{
   e.preventDefault();const settings=Object.fromEntries(fields.map(f=>[f,q(f).value]));
   const r=await chrome.runtime.sendMessage({type:'SAVE_SETTINGS',settings,keys:Object.fromEntries(keyNames.map(name=>[name,q(name).value.trim()]))});
-  q('message').textContent=r.ok?'Saved. Open the KeroTranslate toolbar popup on a YouTube Live tab and press Start captions.':r.error;
+  q('message').textContent=r.ok?'Settings and API keys saved on this device. Open the KeroTranslate toolbar popup on a YouTube Live tab and press Start captions.':r.error;
 };
 q('clear').onclick=async()=>{const r=await chrome.runtime.sendMessage({type:'CLEAR_KEYS'});if(r.ok){for(const name of keyNames)q(name).value='';q('message').textContent='All API keys deleted. Capture and pending requests stopped.';}else q('message').textContent=r.error;};

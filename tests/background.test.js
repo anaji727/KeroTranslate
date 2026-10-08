@@ -8,12 +8,12 @@ const options={id:'test',url:'chrome-extension://test/options.html'};
 const audio={id:'test',url:'chrome-extension://test/offscreen.html'};
 const message=(m,s=content)=>new Promise(resolve=>listener(m,s,resolve));
 test('storage is restricted to trusted extension contexts',()=>{assert.deepEqual(access,[['local','TRUSTED_CONTEXTS'],['session','TRUSTED_CONTEXTS']]);});
-test('content scripts cannot read keys or mutate private settings',async()=>{for(const type of ['PRIVATE_CONFIG','CLEAR_KEYS','SAVE_SETTINGS','START_CAPTURE']){const r=await message({type});assert.equal(r.ok,false);assert.ok(!JSON.stringify(r).includes('secret-g'));}assert.equal(data.session.keys.gemini,'secret-g');});
+test('content scripts cannot read keys or mutate private settings',async()=>{for(const type of ['PRIVATE_CONFIG','CLEAR_KEYS','SAVE_SETTINGS','START_CAPTURE']){const r=await message({type});assert.equal(r.ok,false);assert.ok(!JSON.stringify(r).includes('secret-g'));}assert.equal(data.local.keys.gemini,'secret-g');});
 test('public config contains no credentials',async()=>{const r=await message({type:'CONFIG'});assert.equal(r.ok,true);assert.ok(!JSON.stringify(r).includes('secret'));assert.equal(r.keys,undefined);});
 test('unrelated page is rejected',async()=>{assert.equal((await message({type:'CONFIG'},{...content,url:'https://example.com/'})).ok,false);});
-test('trusted options can retrieve session keys',async()=>{const r=await message({type:'PRIVATE_CONFIG'},options);assert.equal(r.keys.gemini,'secret-g');});
+test('trusted options can retrieve persistent keys',async()=>{const r=await message({type:'PRIVATE_CONFIG'},options);assert.equal(r.keys.gemini,'secret-g');});
 test('late audio events after Stop cannot revive session or publish captions',async()=>{data.session.capture={id:'old',tabId:42};await message({type:'STOP_CAPTURE'},options);const count=sent.length;await message({type:'AUDIO_STATUS',id:'old',status:'LISTENING'},audio);await message({type:'AUDIO_CUE',id:'old',cue:{original:'late'}},audio);assert.equal(data.session.capture,undefined);assert.equal(sent.length,count);});
-test('key deletion clears session credentials',async()=>{await message({type:'CLEAR_KEYS'},options);assert.equal(data.session.keys,undefined);});
+test('key deletion clears persistent and legacy credentials',async()=>{data.session.keys={gemini:'legacy'};await message({type:'CLEAR_KEYS'},options);assert.equal(data.local.keys,undefined);assert.equal(data.session.keys,undefined);});
 test('capture refuses a live player whose overlay failed initialization',async()=>{
   const send=chrome.tabs.sendMessage;
   chrome.tabs.get=async()=>({url:'https://www.youtube.com/watch?v=test'});
@@ -36,18 +36,18 @@ test('panel start ignores a supplied tab ID and targets its own live watch tab',
 test('all provider keys remain private after saving and all are deleted together',async()=>{
   const keys={gemini:'g',deepgram:'d',openai:'private-openai',deepl:'private-deepl',deepseek:'private-deepseek',unknown:'drop'};
   assert.equal((await message({type:'SAVE_SETTINGS',settings:{translationProvider:'deepseek',sttProvider:'openai'},keys},options)).ok,true);
-  assert.equal(data.session.keys.openai,keys.openai);assert.equal(data.session.keys.unknown,undefined);
+  assert.equal(data.local.keys.openai,keys.openai);assert.equal(data.local.keys.unknown,undefined);
   const config=await message({type:'CONFIG'});assert.equal(config.settings.sttProvider,'openai');assert.equal(config.settings.translationProvider,'deepseek');assert.ok(!JSON.stringify(config).includes('private-'));
-  await message({type:'CLEAR_KEYS'},options);assert.equal(data.session.keys,undefined);
+  await message({type:'CLEAR_KEYS'},options);assert.equal(data.local.keys,undefined);assert.equal(data.session.keys,undefined);
 });
 test('new real STT providers require their own key and capture the selected tab',async()=>{
   const send=chrome.tabs.sendMessage;let captures=0;
   chrome.tabs.get=async()=>({url:'https://www.youtube.com/watch?v=test'});chrome.tabs.sendMessage=async()=>({live:true,overlayReady:true});
   chrome.runtime.getContexts=async()=>[{}];chrome.tabCapture={async getMediaStreamId({targetTabId}){assert.equal(targetTabId,42);captures++;return 'stream';}};
   try{for(const provider of ['openai','deepl']){
-    data.local.settings={sttProvider:provider,captionMode:'original'};data.session.keys={};
+    data.local.settings={sttProvider:provider,captionMode:'original'};data.local.keys={};
     assert.match((await message({type:'START_CAPTURE',tabId:42},options)).error,/key/);
-    data.session.keys={[provider]:'fake'};assert.equal((await message({type:'START_CAPTURE',tabId:42},options)).ok,true);
+    data.local.keys={[provider]:'fake'};assert.equal((await message({type:'START_CAPTURE',tabId:42},options)).ok,true);
     assert.equal(sent.findLast(m=>m.target==='offscreen'&&m.type==='START').streamId,'stream');await message({type:'STOP_CAPTURE'},options);
   }assert.equal(captures,2);}finally{chrome.tabs.sendMessage=send;data.local.settings={};}
 });
@@ -60,7 +60,7 @@ test('caption translation RPC rejects content scripts, non-audio pages and ended
   for(const sender of [content,options,audio])assert.equal((await message(request,sender)).ok,false);
 });
 test('worker serializes real caption, comment and back-translation HTTP together',async()=>{
-  data.local.settings={translationProvider:'gemini',translationInterval:500,captionTarget:'en'};data.session.keys={gemini:'fake'};data.session.capture={id:'queue-session',tabId:42};
+  data.local.settings={translationProvider:'gemini',translationInterval:500,captionTarget:'en'};data.local.keys={gemini:'fake'};data.session.capture={id:'queue-session',tabId:42};
   const oldFetch=globalThis.fetch,order=[];let finish,active=0,maximum=0;
   const response=()=>({ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:'translated'}]}}]})});
   globalThis.fetch=async(_url,o)=>{active++;maximum=Math.max(maximum,active);const text=JSON.parse(o.body).contents[0].parts[0].text;order.push(text);if(text==='caption one')await new Promise(r=>finish=r);active--;return response();};
@@ -80,11 +80,31 @@ test('fresh and legacy demo configurations require keys before capturing audio',
   chrome.tabs.sendMessage=async()=>({live:true,overlayReady:true});
   chrome.tabCapture={getMediaStreamId(){assert.fail('must not capture without configured keys');}};
   try{for(const settings of [{},{sttProvider:'demo',translationProvider:'demo'}]){
-    data.local.settings=settings;data.session.keys={};
+    data.local.settings=settings;data.local.keys={};
     const result=await message({type:'START_CAPTURE',tabId:42},options);
     assert.equal(result.ok,false);assert.match(result.error,/Deepgram API key/);
     assert.equal(data.session.capture,undefined);
-    data.session.keys={deepgram:'fake'};
+    data.local.keys={deepgram:'fake'};
     assert.match((await message({type:'START_CAPTURE',tabId:42},options)).error,/Gemini API key/);
-  }}finally{chrome.tabs.sendMessage=send;chrome.tabCapture=capture;data.local.settings={};data.session.keys={};}
+  }}finally{chrome.tabs.sendMessage=send;chrome.tabCapture=capture;data.local.settings={};data.local.keys={};}
+});
+
+test('saved credentials survive worker and browser-session restart without exposing keys',async()=>{
+  const keys={gemini:'persistent-g',deepgram:'persistent-d',openai:'persistent-o',deepl:'persistent-l',deepseek:'persistent-s'};
+  assert.equal((await message({type:'SAVE_SETTINGS',settings:{source:'en'},keys},options)).ok,true);
+  assert.equal(data.session.keys,undefined);
+  data.session={};
+  await import('../extension/background.js?browser-restart');
+  const config=await message({type:'PRIVATE_CONFIG'},options);
+  assert.deepEqual(config.keys,keys);assert.equal(config.settings.source,'en');
+  const status=await message({type:'STATUS'},options);
+  assert.equal(status.capture,undefined);assert.ok(!JSON.stringify(status).includes('persistent-'));
+  assert.equal((await message({type:'PRIVATE_CONFIG'})).ok,false);
+  assert.ok(!JSON.stringify(await message({type:'CONFIG'})).includes('persistent-'));
+  await message({type:'SAVE_SETTINGS',settings:{source:'ja'}},options);
+  assert.deepEqual((await message({type:'PRIVATE_CONFIG'},options)).keys,keys);
+  await message({type:'CLEAR_KEYS'},options);
+  data.session={};
+  await import('../extension/background.js?after-key-deletion');
+  assert.deepEqual((await message({type:'PRIVATE_CONFIG'},options)).keys,{});
 });

@@ -20,7 +20,7 @@ The handoff scope is YouTube Live, EN↔JA, BYOK, audio captions, translating th
 | MTL INSERT | Wait until READY | Let the user check current back-translation; revisit after measuring speed |
 | Existing draft | Insert if empty; otherwise replace/keep | Reconfirm if native input changes during confirmation; no append mode initially |
 | Languages | EN→JA or JA→EN composer; fixed caption output | Mixed STT is experimental; no automatic reversal of caption target per segment |
-| Keys | Session-only | Avoid persistent-key risk and additional initial UI |
+| Keys | Local persistence since 0.1.11 | Retain user-entered credentials across restarts; restrict access to trusted extension contexts |
 | Captions | Bottom-center, original + translation, maximum two lines each, ten seconds after translation | Configurable 75–200% size; newer provisional text has a separate row |
 | Target layout | Normal watch page | Update fullscreen/theater/pop-out support after testing |
 | Local dictionary | Deferred | Identify needed names through initial accuracy evaluation |
@@ -64,7 +64,7 @@ flowchart LR
 - Permissions are storage, activeTab, tabCapture and offscreen. YouTube host access supports SPA navigation and the chat frame. Provider hosts are explicitly listed for Gemini, Deepgram, OpenAI, DeepL and DeepSeek. No microphone/all-sites permission, remote script or analytics SDK is requested.
 - API calls run in extension contexts. Ordinary-page CORS behavior is not identical to extension host permissions. [Cross-origin requests](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests).
 
-Keys are not stored in local/sync. Non-secret local settings and session credentials are restricted to TRUSTED_CONTEXTS. Content scripts receive sanitized settings only. Raw API bodies and authentication exceptions are not normal UI output. Closed Shadow DOM provides style isolation, not the secret boundary.
+Since Beta 0.1.11, keys and settings use storage.local, restricted to TRUSTED_CONTEXTS. Capture state and metrics use storage.session with the same access restriction. Keys are never stored in storage.sync. Remaining legacy session keys migrate only when no local key record exists; an existing local record wins. The legacy copy is removed after a successful migration. Delete all API keys removes both local and legacy session copies. Local storage is not an encrypted credential vault. Content scripts receive sanitized settings only. Raw API bodies and authentication exceptions are not normal UI output. Closed Shadow DOM provides style isolation, not the secret boundary.
 
 ## 4. Revisions, cancellation and Stop
 

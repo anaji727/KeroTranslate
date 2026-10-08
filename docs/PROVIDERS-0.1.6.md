@@ -1,5 +1,7 @@
 # KeroTranslate 0.1.6 — additional providers
 
+> **Since 0.1.11:** API keys persist locally across Chrome restarts and extension reloads. Session-only storage and re-entry instructions below describe the historical version. Delete all API keys removes saved credentials.
+
 [日本語](PROVIDERS-0.1.6.jp.md) · [Current README](../README.md)
 
 Historical integration note dated October 7, 2026. The implementation was based on provider documentation and tested with simulated traffic. Live account connections, billing, quality and stream latency were not verified. Endpoint and model names below describe the code, not a guarantee of current account access.

@@ -1,5 +1,7 @@
 # Caption initialization fix — 0.1.1
 
+> **Since 0.1.11:** API keys persist locally across Chrome restarts and extension reloads. Session-only storage and re-entry instructions below describe the historical version. Delete all API keys removes saved credentials.
+
 [日本語](CAPTION-FIX-0.1.1.jp.md) · [Current README](../README.md)
 
 > Historical release note. The startup flow changed in 0.1.7: start directly from the toolbar popup on a new tab. Follow the current README for installation.
