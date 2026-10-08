@@ -37,6 +37,6 @@ test('retry-after seconds/date are honored, absent headers use 30 seconds',()=>{
   const dated=get(new Date(Date.now()+60000).toUTCString()).retryAfterMs;assert.ok(dated>=59000&&dated<=60000);
   assert.equal(get('malformed').retryAfterMs,30000);
 });
-test('request interval defaults conservatively and accepts only supported choices',()=>{
-  assert.equal(sanitizeSettings().translationInterval,4000);assert.equal(sanitizeSettings({translationInterval:'12000'}).translationInterval,12000);assert.equal(sanitizeSettings({translationInterval:-1}).translationInterval,4000);
+test('request interval defaults to one second and accepts only supported choices',()=>{
+  assert.equal(sanitizeSettings().translationInterval,1000);assert.equal(sanitizeSettings({translationInterval:'12000'}).translationInterval,12000);assert.equal(sanitizeSettings({translationInterval:-1}).translationInterval,1000);
 });

@@ -129,4 +129,4 @@ The initial implementation built P1–P3 foundations together, but integration c
 
 ## 0.1.8 shared translation queue
 
-Offscreen no longer calls translation providers directly. It sends CAPTION_TRANSLATE with the session ID to the worker. The worker checks the sender/current capture ID and schedules comments/captions in the same provider-specific queue. Stop/key deletion cancel caption requests too. The 20-second HTTP timeout starts on dispatch, excluding queue wait. The default four-second start interval is adjustable and does not guarantee an account's quota.
+Offscreen no longer calls translation providers directly. It sends CAPTION_TRANSLATE with the session ID to the worker. The worker checks the sender/current capture ID and schedules comments/captions in the same provider-specific queue. Stop/key deletion cancel caption requests too. The 20-second HTTP timeout starts on dispatch, excluding queue wait. Since Beta 0.1.12, the default one-second start interval is adjustable and does not guarantee an account's quota.

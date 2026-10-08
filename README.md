@@ -8,7 +8,7 @@ Follow a stream with original and translated captions. Draft a comment, translat
 
 **INSERT only fills the chat input. It never sends a message. You review and post it yourself.**
 
-Current version: **Beta 0.1.11** (October 8, 2026).
+Current version: **Beta 0.1.12** (October 8, 2026).
 
 ## Install the beta
 
@@ -75,9 +75,11 @@ Under **Settings → 03 / Captions**:
 |---|---|
 | Show | Original + MTL (default), Original only, MTL only |
 | Caption size | 75 / 100 / 125 / 150 / 200%; default 100% |
-| Keep captions after translation | 5 / 7 / 10 / 15 / 20 seconds; default 10 |
+| Keep captions after translation | 5 / 7 / 10 / 15 / 20 seconds; default 5 |
 | Maximum lines per language | 1 or 2; default 2, including provisional text |
 | Position | Nine anchors in a 3×3 grid; default bottom-center |
+
+The five-second reading time starts when the translation arrives. If captions disappear before you finish reading, try 7–10 seconds, or 15–20 seconds for longer passages. New translations can replace the current caption sooner, and waiting for the next translation can keep it visible longer. This setting controls display time, not translation speed or request frequency. Saved display preferences are preserved; existing users can select five seconds manually.
 
 Partial text is visible in Original + MTL and Original only. MTL only hides the original. Original only does not call the caption translation API; its timer starts from the original-text update.
 
@@ -99,7 +101,7 @@ If YouTube already has a draft, choose **Replace draft** or **Keep draft**. Repe
 
 Caption translation, comment translation and back-translation share a background queue per translation provider. Only one translation HTTP request runs at a time per provider. Waiting comments have priority; an active caption request finishes first. Speech recognition streams are separate from this queue.
 
-**Minimum interval between translation requests** defaults to four seconds, approximately 15 starts per minute. Choices are 0.5 / 1 / 2 / 4 / 6 / 12 seconds. A comment normally requires two requests, sharing the same allowance as captions. Adjust this setting to your account's limits; it is not a quota guarantee.
+**Minimum interval between translation requests** defaults to one second, at most approximately 60 starts per minute. Choices are 0.5 / 1 / 2 / 4 / 6 / 12 seconds. A comment normally requires two requests, sharing the same allowance as captions. Start with one second for shorter queue waits. If rate-limit errors occur, increase the interval to 2–4 seconds, or 6–12 seconds for stricter limits, according to your provider account. A shorter interval can increase request volume and cost; it does not speed up the provider itself or guarantee quota availability. Saved settings are preserved on update; existing users can select one second manually in Settings.
 
 After HTTP 429 or 456, that provider pauses according to Retry-After, capped at 24 hours, or for 30 seconds if no usable value is returned. Failed and queued work is not automatically replayed. Retry a comment after the indicated delay; captions resume with new recognition segments. Stop, input changes and key deletion cancel unneeded pending work.
 
@@ -163,6 +165,8 @@ node tools/check.js
 English is the primary documentation language. Each document links to a corresponding `.jp.md` Japanese version. Historical notes describe their original releases; use this README for current installation instructions.
 
 ## Changelog
+
+- **Beta 0.1.12:** Default translation request spacing to one second and caption retention after translation to five seconds. Preserve saved preferences and add tuning advice.
 
 - **Beta 0.1.11:** Persist API keys locally across Chrome restarts and extension reloads. Migrate remaining legacy session keys, retain trusted-context access restrictions, and remove saved credentials with Delete all API keys.
 

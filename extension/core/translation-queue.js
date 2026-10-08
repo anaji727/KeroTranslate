@@ -4,7 +4,7 @@ import {ProviderError} from './providers.js';
 // requests share these lanes. STT streams do not go through this queue.
 export class TranslationQueue {
   constructor({now=()=>Date.now(),setTimer=setTimeout,clearTimer=clearTimeout}={}){Object.assign(this,{now,setTimer,clearTimer});this.lanes=new Map();}
-  schedule({provider,signal,intervalMs=4000,priority=0,run}){
+  schedule({provider,signal,intervalMs=1000,priority=0,run}){
     if(signal?.aborted)return Promise.reject(new DOMException('Aborted','AbortError'));
     let lane=this.lanes.get(provider);
     if(!lane){lane={queue:[],running:false,nextAt:0,blockedUntil:0,timer:null};this.lanes.set(provider,lane);}

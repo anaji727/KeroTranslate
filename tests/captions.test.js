@@ -41,5 +41,5 @@ test('translation-only mode has no empty box while awaiting first result',t=>{
 test('size updates existing captions and settings reject unsupported values',t=>{
   const {view,nodes}=harness(t);view.configure({captionSize:200});assert.equal(nodes['.text'].style.fontSize,'clamp(28px,4vw,48px)');
   assert.equal(sanitizeSettings({captionSize:'150',captionDuration:'20'}).captionSize,150);
-  assert.equal(sanitizeSettings({captionDuration:0,captionSize:999}).captionDuration,10);assert.equal(sanitizeSettings({captionSize:999}).captionSize,100);
+  assert.equal(sanitizeSettings({captionDuration:0,captionSize:999}).captionDuration,5);assert.equal(sanitizeSettings({captionSize:999}).captionSize,100);
 });
