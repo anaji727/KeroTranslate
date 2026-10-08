@@ -3,7 +3,19 @@
     import(chrome.runtime.getURL('ui/composer-view.js')),import(chrome.runtime.getURL('ui/captions.js')),import(chrome.runtime.getURL('youtube.js'))
   ]);
   let config,composer,captions,captionHost,chatHost,lastUrl=location.href,queued=false,generation=0,mounting;
-  const send=message=>chrome.runtime.sendMessage(message);
+  let contextValid=true,observer;
+  const reconnectMessage='KeroTranslate was reloaded or disconnected. Reload this YouTube page to reconnect. Your comment is still shown below.';
+  function disconnect(){
+    if(!contextValid)return;contextValid=false;generation++;observer?.disconnect();
+    composer?.connectionLost(reconnectMessage);captions?.dispose();captions=null;captionHost=null;
+  }
+  // Chrome may throw synchronously after an extension update, including on CANCEL.
+  // Always return a promise so every caller can handle that failure.
+  const send=async message=>{
+    if(!contextValid)throw new Error(reconnectMessage);
+    try{return await chrome.runtime.sendMessage(message);}
+    catch(error){if(/Extension context invalidated/i.test(error?.message||'')){disconnect();throw new Error(reconnectMessage);}throw error;}
+  };
   const progress=new Map();
   async function translateBatch({signal,onProgress,...request}){
     const id=crypto.randomUUID();let timer;
@@ -22,12 +34,13 @@
       return {mtl:result.mtl,back:result.back};
     }finally{clearTimeout(timer);progress.delete(id);signal.removeEventListener('abort',onAbort);}
   }
-  function cleanup(){generation++;composer?.dispose();composer=null;captions?.dispose();captions=null;chatHost?.remove();captionHost?.remove();chatHost=null;captionHost=null;send({type:'NAVIGATED'}).catch(()=>{});}
+  function cleanup(){generation++;composer?.dispose();composer=null;captions?.dispose();captions=null;chatHost?.remove();captionHost?.remove();chatHost=null;captionHost=null;if(contextValid)send({type:'NAVIGATED'}).catch(()=>{});}
   async function initialize(){
+    if(!contextValid)return;
     if(lastUrl!==location.href){cleanup();lastUrl=location.href;}
     if(!/^\/(watch|live_chat)\/?$/.test(location.pathname))return;
     const url=location.href,version=generation;
-    if(!config){const result=await send({type:'CONFIG'});if(version!==generation||url!==location.href)return;if(!result?.ok||!result.settings)throw new Error('Settings unavailable. Reload this YouTube page.');config=result.settings;}
+    if(!config){const result=await send({type:'CONFIG'});if(!contextValid||version!==generation||url!==location.href)return;if(!result?.ok||!result.settings)throw new Error('Settings unavailable. Reload this YouTube page.');config=result.settings;}
     if(/^\/live_chat\/?$/.test(location.pathname)){
       const renderer=document.querySelector('yt-live-chat-message-input-renderer');
       if(renderer&&(!chatHost?.isConnected)){
@@ -65,7 +78,7 @@
     if(message.type==='TIMING_CHANGED'){config={...config,...message.timings};composer?.refreshTiming(message.timings);captions?.configure(config);}
     if(message.type==='CONFIG_CHANGED'){config=message.settings;composer?.refresh(config);captions?.configure(config);}
   });
-  const observer=new MutationObserver(()=>{if(!queued){queued=true;setTimeout(()=>{queued=false;mount().catch(()=>{});},400);}});
+  observer=new MutationObserver(()=>{if(!queued){queued=true;setTimeout(()=>{queued=false;mount().catch(()=>{});},400);}});
   observer.observe(document.documentElement,{childList:true,subtree:true});
   document.addEventListener('yt-navigate-start',cleanup);
   window.addEventListener('pagehide',()=>{cleanup();observer.disconnect();},{once:true});

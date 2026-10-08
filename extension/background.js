@@ -92,14 +92,25 @@ async function handle(m,sender){
       if(m.type==='TRANSLATE_COMMENT'){
         const request=m.request||{},source=request.source,target=request.target;
         if(!['en','ja'].includes(source)||target!==(source==='en'?'ja':'en')||typeof request.text!=='string'||!request.text.trim()||request.text.length>2000||typeof request.backOnly!=='boolean'||(request.backOnly&&(typeof request.mtl!=='string'||!request.mtl.trim()||request.mtl.length>2000)))throw new Error('Invalid comment translation request.');
-        return await translations.schedule({provider:config.translationProvider,signal:controller.signal,priority:1,intervalMs:config.translationInterval,run:async({nextRequest})=>{
+        let stage='queue';
+        try{return await translations.schedule({provider:config.translationProvider,signal:controller.signal,priority:1,intervalMs:config.translationInterval,run:async({nextRequest})=>{
+          stage=request.backOnly?'edited translation':'translation';
           const mtl=request.backOnly?request.mtl:await translate({text:request.text,source,target,signal:controller.signal},config,keys);
           if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
           await chrome.tabs.sendMessage(sender.tab.id,{type:'COMPOSER_PROGRESS',id:m.id,mtl},{frameId:sender.frameId}).catch(()=>{});
-          if(!request.backOnly)await nextRequest();
+          if(!request.backOnly){stage='back-translation wait';await nextRequest();}
+          stage='back-translation';
           const back=await translate({text:mtl,source:target,target:source,signal:controller.signal},config,keys);
           return {mtl,back};
-        }});
+        }});}catch(error){
+          if(/Illegal invocation/.test(error?.message||'')){
+            // Log only the stage and local source locations, never text or keys.
+            const locations=String(error.stack||'').split('\n').filter(line=>/^\s+at /.test(line)&&/chrome-extension:\/\//.test(line)).join('\n');
+            console.error(`KeroTranslate comment failure (${stage})`,locations);
+            const failure=new Error(`Comment ${stage}: Illegal invocation. Reload the extension and this YouTube page. If it recurs, report this stage.`);failure.code='RUNTIME';throw failure;
+          }
+          throw error;
+        }
       }
       const text=await translations.schedule({provider:config.translationProvider,signal:controller.signal,priority:1,intervalMs:config.translationInterval,run:()=>translate({...m.request,signal:controller.signal},config,keys)});
       return {text};

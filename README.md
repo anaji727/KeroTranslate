@@ -8,7 +8,7 @@ Follow a stream with original and translated captions. Draft a comment, translat
 
 **INSERT only fills the chat input. It never sends a message. You review and post it yourself.**
 
-Current version: **Beta 0.1.14** (October 9, 2026).
+Current version: **Beta 0.1.15** (October 9, 2026).
 
 ## Install the beta
 
@@ -127,6 +127,8 @@ This addresses concurrency and bursts, not daily quotas, token limits or other a
 
 | Symptom | Check |
 |---|---|
+| Illegal invocation during re-MTL | Update to 0.1.15 or later, reload the extension, then reload YouTube. If it recurs, report the stage in the panel and the queue stack trace |
+| Extension context invalidated | A previously loaded script lost its extension connection. The new handler stops further sends and retains the visible draft; copy it before reloading YouTube |
 | No main panel | Open live chat on a normal YouTube Live watch page and reload YouTube |
 | Overlay initialization error | Wait for the video to load; reload YouTube after updating the extension, then start from the toolbar |
 | No captions | Use **Test overlay** in the popup to check display with a fixed caption, without audio or provider requests |
@@ -181,6 +183,8 @@ node tools/check.js
 English is the primary documentation language. Each document links to a corresponding `.jp.md` Japanese version. Historical notes describe their original releases; use this README for current installation instructions.
 
 ## Changelog
+
+- **Beta 0.1.15:** Explicitly bind native queue timers to the browser global, including supplied timer functions. Catch failures inside back-translation wait callbacks and queued dispatch so promises settle and later work can recover. Add stage-specific Illegal invocation diagnostics. Stop stale content scripts after extension-context invalidation, preserving the visible draft and showing a reload instruction.
 
 - **Beta 0.1.14:** Add a full-width indeterminate activity bar for comment translation and back-translation, visible while minimized and with reduced-motion support.
 

@@ -44,9 +44,9 @@ test('timing broadcasts update the existing overlay without rebuilding or cleari
 
 
 async function composerHarness(){
-  let listener,options,id=0;const sent=[],timers=new Map(),replies=new Map();
-  const context={Promise,Map,DOMException,crypto:{randomUUID:()=>String(++id)},location:{pathname:'/live_chat',href:'https://www.youtube.com/live_chat?v=test'},setTimeout(fn,ms){timers.set(ms,fn);return ms;},clearTimeout(ms){timers.delete(ms);},window:{addEventListener(){}},document:{documentElement:{},addEventListener(){},querySelector:()=>({before(){}}),createElement:()=>({style:{},remove(){}})},MutationObserver:class{observe(){}disconnect(){}},chrome:{runtime:{getURL:p=>p,onMessage:{addListener(fn){listener=fn;}},sendMessage(m){sent.push(m);if(m.type==='TRANSLATE_COMMENT')return new Promise(r=>replies.set(m.id,r));return Promise.resolve(m.type==='CONFIG'?{ok:true,settings:{}}:{ok:true});}}},modules:{'ui/composer-view.js':{mountComposer(_host,o){options=o;return {captureStatus(){}};}},'ui/captions.js':{},'youtube.js':{}}};
-  await vm.runInNewContext(source,context);return {options,sent,timers,replies,notify:m=>listener(m,{},()=>{})};
+  let listener,options,id=0,transportError=null,disconnected=0;const lost=[];const sent=[],timers=new Map(),replies=new Map();
+  const context={Promise,Map,DOMException,crypto:{randomUUID:()=>String(++id)},location:{pathname:'/live_chat',href:'https://www.youtube.com/live_chat?v=test'},setTimeout(fn,ms){timers.set(ms,fn);return ms;},clearTimeout(ms){timers.delete(ms);},window:{addEventListener(){}},document:{documentElement:{},addEventListener(){},querySelector:()=>({before(){}}),createElement:()=>({style:{},remove(){}})},MutationObserver:class{observe(){}disconnect(){disconnected++;}},chrome:{runtime:{getURL:p=>p,onMessage:{addListener(fn){listener=fn;}},sendMessage(m){sent.push(m);if(transportError)throw transportError;if(m.type==='TRANSLATE_COMMENT')return new Promise(r=>replies.set(m.id,r));return Promise.resolve(m.type==='CONFIG'?{ok:true,settings:{}}:{ok:true});}}},modules:{'ui/composer-view.js':{mountComposer(_host,o){options=o;return {captureStatus(){},connectionLost:message=>lost.push(message)};}},'ui/captions.js':{},'youtube.js':{}}};
+  await vm.runInNewContext(source,context);return {options,sent,timers,replies,lost,get disconnected(){return disconnected;},failTransport:error=>{transportError=error;},notify:m=>listener(m,{},()=>{})};
 }
 test('content routes matching batch progress and drops cancelled/finished progress',async()=>{
   const h=await composerHarness(),updates=[],controller=new AbortController();
@@ -61,4 +61,19 @@ test('content times out an unresponsive comment batch and permits a fresh reques
   const h=await composerHarness(),args={text:'first',source:'en',target:'ja',backOnly:false,signal:new AbortController().signal,onProgress(){}};
   const stalled=h.options.translateBatch(args);h.timers.get(120000)();await assert.rejects(stalled,/Retry all/);assert.ok(h.sent.some(m=>m.type==='CANCEL'&&m.id==='1'));
   const next=h.options.translateBatch(args);h.replies.get('2')({ok:true,mtl:'ok',back:'ok'});assert.equal((await next).mtl,'ok');
+});
+
+
+test('invalidated Chrome context rejects safely, stops observation and never sends again',async()=>{
+  const h=await composerHarness();h.failTransport(new Error('Extension context invalidated.'));
+  const args={text:'keep draft',source:'en',target:'ja',backOnly:false,signal:new AbortController().signal,onProgress(){}};
+  await assert.rejects(h.options.translateBatch(args),/Reload this YouTube page/);
+  assert.equal(h.lost.length,1);assert.equal(h.disconnected,1);assert.equal(h.timers.size,0);
+  const sent=h.sent.length;await assert.rejects(h.options.translateBatch(args),/Reload this YouTube page/);assert.equal(h.sent.length,sent);assert.equal(h.lost.length,1);
+});
+test('synchronous CANCEL failure cannot escape the abort listener or leave the batch pending',async()=>{
+  const h=await composerHarness(),controller=new AbortController();
+  const pending=h.options.translateBatch({text:'keep draft',source:'en',target:'ja',backOnly:false,signal:controller.signal,onProgress(){}});
+  h.failTransport(new Error('Extension context invalidated.'));controller.abort();
+  await assert.rejects(pending,{name:'AbortError'});assert.equal(h.lost.length,1);assert.equal(h.timers.size,0);
 });

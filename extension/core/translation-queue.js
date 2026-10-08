@@ -3,7 +3,13 @@ import {ProviderError} from './providers.js';
 // Owned only by the service worker: all caption and composer HTTP translation
 // requests share these lanes. STT streams do not go through this queue.
 export class TranslationQueue {
-  constructor({now=()=>Date.now(),setTimer=(fn,ms)=>setTimeout(fn,ms),clearTimer=id=>clearTimeout(id)}={}){Object.assign(this,{now,setTimer,clearTimer});this.lanes=new Map();}
+  constructor({now=()=>Date.now(),setTimer=globalThis.setTimeout,clearTimer=globalThis.clearTimeout}={}){
+    this.now=now;
+    // Native Window/Worker timers require their global receiver, even when injected.
+    this.setTimer=(fn,ms)=>Reflect.apply(setTimer,globalThis,[fn,ms]);
+    this.clearTimer=id=>Reflect.apply(clearTimer,globalThis,[id]);
+    this.lanes=new Map();
+  }
   schedule({provider,signal,intervalMs=1000,priority=0,run}){
     if(signal?.aborted)return Promise.reject(new DOMException('Aborted','AbortError'));
     let lane=this.lanes.get(provider);
@@ -27,15 +33,22 @@ export class TranslationQueue {
   // Hold the lane for a comment transaction, while pacing each HTTP request.
   nextRequest(lane,job){
     return new Promise((resolve,reject)=>{
-      let timer=null;
-      const cleanup=()=>{if(timer!==null)this.clearTimer(timer);lane.wake=null;job.signal?.removeEventListener('abort',abort);};
-      const abort=()=>{cleanup();reject(new DOMException('Aborted','AbortError'));};
+      let timer=null,settled=false;
+      const finish=error=>{
+        if(settled)return;settled=true;lane.wake=null;job.signal?.removeEventListener('abort',abort);
+        if(timer!==null){const previous=timer;timer=null;try{this.clearTimer(previous);}catch(e){error??=e;}}
+        if(error)reject(error);else resolve();
+      };
+      const abort=()=>finish(new DOMException('Aborted','AbortError'));
       const check=()=>{
-        if(timer!==null){this.clearTimer(timer);timer=null;}
-        if(job.signal?.aborted){abort();return;}
-        const delay=lane.nextAt-this.now();
-        if(delay>0){timer=this.setTimer(check,delay);return;}
-        cleanup();lane.lastStartedAt=this.now();lane.nextAt=lane.lastStartedAt+job.intervalMs;resolve();
+        if(settled)return;
+        try{
+          if(timer!==null){const previous=timer;timer=null;this.clearTimer(previous);}
+          if(job.signal?.aborted){abort();return;}
+          const delay=lane.nextAt-this.now();
+          if(delay>0){timer=this.setTimer(check,delay);return;}
+          lane.lastStartedAt=this.now();lane.nextAt=lane.lastStartedAt+job.intervalMs;finish();
+        }catch(error){finish(error);}
       };
       lane.wake=check;job.signal?.addEventListener('abort',abort,{once:true});check();
     });
@@ -46,6 +59,13 @@ export class TranslationQueue {
     error.retryAfterMs=remaining;return error;
   }
   pump(lane){
+    try{this.dispatch(lane);}catch(error){
+      // Timer failures must settle queued promises, including from timer callbacks.
+      lane.timer=null;
+      for(const job of lane.queue.splice(0)){job.signal?.removeEventListener('abort',job.abort);job.reject(error);}
+    }
+  }
+  dispatch(lane){
     if(lane.running)return;
     if(lane.timer!==null){this.clearTimer(lane.timer);lane.timer=null;}
     if(!lane.queue.length)return;

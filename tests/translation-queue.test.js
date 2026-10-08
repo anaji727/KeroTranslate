@@ -75,7 +75,26 @@ test('a failed job and overflow rejection do not poison later queued work',async
 });
 test('default timers never invoke native browser timer functions with the queue as receiver',async t=>{
   const realSet=setTimeout,realClear=clearTimeout;
-  t.mock.method(globalThis,'setTimeout',function(fn,ms){assert.equal(this,undefined);return realSet(fn,ms);});
-  t.mock.method(globalThis,'clearTimeout',function(id){assert.equal(this,undefined);return realClear(id);});
+  t.mock.method(globalThis,'setTimeout',function(fn,ms){assert.equal(this,globalThis);return realSet(fn,ms);});
+  t.mock.method(globalThis,'clearTimeout',function(id){assert.equal(this,globalThis);return realClear(id);});
   const queue=new TranslationQueue();assert.equal(await queue.schedule({provider:'gemini',intervalMs:10,run:()=>1}),1);assert.equal(await queue.schedule({provider:'gemini',intervalMs:10,run:()=>2}),2);
+});
+
+
+test('explicit native timers retain the global receiver during back-translation waits',async()=>{
+  const queue=new TranslationQueue({setTimer:function(fn,ms){assert.equal(this,globalThis);return setTimeout(fn,ms);},clearTimer:function(id){assert.equal(this,globalThis);clearTimeout(id);}});
+  const result=await queue.schedule({provider:'gemini',intervalMs:10,run:async({nextRequest})=>{await nextRequest();return 'back translated';}});
+  assert.equal(result,'back translated');
+});
+test('a timer failure during a repeated back-translation wait rejects and releases the lane',async()=>{
+  let time=0,callback,calls=0;const queue=new TranslationQueue({now:()=>time,setTimer:fn=>{if(++calls===2)throw new TypeError('Illegal invocation');callback=fn;return calls;},clearTimer(){}});
+  const batch=queue.schedule({provider:'gemini',intervalMs:1000,run:async({nextRequest})=>{await nextRequest();return 'must not finish';}});
+  const rejected=assert.rejects(batch,/Illegal invocation/);await flush();time=500;assert.doesNotThrow(()=>callback());await rejected;await flush();
+  time=1000;assert.equal(await queue.schedule({provider:'gemini',intervalMs:0,run:()=>42}),42);
+});
+test('a timer failure while dispatching queued work rejects without an unhandled timer exception',async()=>{
+  let time=0,callback,calls=0;const queue=new TranslationQueue({now:()=>time,setTimer:fn=>{if(++calls===2)throw new TypeError('Illegal invocation');callback=fn;return calls;},clearTimer(){}});
+  await queue.schedule({provider:'gemini',intervalMs:1000,run:()=>1});await flush();
+  const pending=queue.schedule({provider:'gemini',intervalMs:1000,run:()=>2});const rejected=assert.rejects(pending,/Illegal invocation/);
+  time=500;assert.doesNotThrow(()=>callback());await rejected;time=1000;assert.equal(await queue.schedule({provider:'gemini',intervalMs:0,run:()=>3}),3);
 });
