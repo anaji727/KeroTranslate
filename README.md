@@ -107,9 +107,20 @@ The header's **−** button minimizes the panel; **+** restores it. Drafts, tran
 
 **Retry all** is always present below re-MTL and becomes available when Original contains text (except during IME composition). It cancels the previous comment operation and restarts both translation and meaning check from the current Original, replacing any manually edited MTL. Use it if either stage fails or appears stuck. It does not bypass provider cooldowns. An unresponsive comment operation times out after two minutes. Error messages in the panel and popup stay visible for at least one second before subsequent updates replace them.
 
-Use **Request gap** and **Caption hold** at the upper-right of the main panel to adjust request spacing and post-translation caption retention. They wrap to the next row in narrow chat panels. Changes save automatically and are shared with Settings and other YouTube tabs. Defaults are one second and five seconds.
+The two controls at the **upper-right of the main panel** adjust different things. If you are unsure, start with **Request gap: 1 s / Caption hold: 5 s**. Here, **s** means seconds.
 
-These controls keep capture running and preserve comment drafts and edited translations. Request spacing updates queued work without interrupting an active request or bypassing a provider cooldown. Caption hold changes apply the next time a caption reading timer starts.
+| Panel control / same setting in Settings | What it changes | Default / choices | When to adjust it |
+|---|---|---|---|
+| **Request gap** / **Minimum interval between translation requests** | Minimum time between the starts of requests sent to your translation service. Applies to captions, comment translation and re-MTL (back-translation). | **1 s** / 0.5, 1, 2, 4, 6, 12 s | Increase it if requests are being sent too often and rate-limit errors occur. Reducing a long gap may shorten waiting, but does not make the service itself translate faster. |
+| **Caption hold** / **Keep captions after translation** | How long a translated caption remains visible, counted from when the translation arrives. | **5 s** / 5, 7, 10, 15, 20 s | Try **7 or 10 s** if captions disappear before you finish reading, or **15 or 20 s** for longer passages. This does not change request frequency or translation speed. |
+
+| What you notice | What to try |
+|---|---|
+| Captions disappear too quickly | Increase **Caption hold**. New translations can still replace the caption sooner; waiting for the next translation can keep it visible longer. |
+| Comment translation or re-MTL takes a long time | Check **Request gap**. If it is 6 or 12 s, try a shorter value within your provider's allowance. Network delays and the service's processing time can still cause waiting. |
+| A rate-limit error appears | Wait for the indicated delay, then increase **Request gap** to 2 or 4 s; use 6 or 12 s for stricter limits. If your usage allowance is exhausted, check the provider's usage page: spacing alone will not restore it. |
+
+Select a value in the main panel to save it automatically. Both controls share their values with Settings and other YouTube tabs, and wrap to the next row in narrow panels. Adjusting them here keeps captions running and preserves your draft and edited translation. Request gap applies to waiting requests without interrupting an active request or clearing a service-imposed pause. Caption hold applies when the next caption reading timer starts. Updates preserve saved values, so an existing installation may differ from the defaults above.
 
 ## Shared request scheduling
 
@@ -119,7 +130,18 @@ Each comment's translation and back-translation now hold one queue slot together
 
 After other caption translation failures, recognition continues while new translation attempts pause for 1–10 seconds, increasing with consecutive failures. New speech during the pause is skipped for translation; fresh segments resume afterward. Only the active and newest waiting caption are retained. The shared queue also rejects excess waiting work without resetting healthy jobs or provider cooldowns. No overflow-count reset setting is required for the browser timer failure fixed in this release.
 
-**Minimum interval between translation requests** defaults to one second, at most approximately 60 starts per minute. Choices are 0.5 / 1 / 2 / 4 / 6 / 12 seconds. A comment normally requires two requests, sharing the same allowance as captions. Start with one second for shorter queue waits. If rate-limit errors occur, increase the interval to 2–4 seconds, or 6–12 seconds for stricter limits, according to your provider account. A shorter interval can increase request volume and cost; it does not speed up the provider itself or guarantee quota availability. Saved settings are preserved on update; existing users can select one second manually in Settings.
+A **request** is one call to the translation service (API). A normal comment uses **two requests: translation + re-MTL**. Captions use the same allowance. **Request gap** in the panel and **Minimum interval between translation requests** in Settings are the same setting.
+
+| Request gap | Approximate maximum request starts per minute* | Choosing a value |
+|---|---:|---|
+| **0.5 s** | 120 | Shortest spacing; use only if your provider allowance supports the higher request rate. |
+| **1 s — default** | 60 | Starting point for shorter waits. Check your provider's allowance. |
+| **2 s** | 30 | First step to reduce request frequency if 1 s triggers rate limits. |
+| **4 s** | 15 | Further reduces request frequency, with more waiting between translation and re-MTL. |
+| **6 s** | 10 | For stricter request limits; comment completion can take noticeably longer. |
+| **12 s** | 5 | Widest spacing; prioritize a low request rate over responsiveness. |
+
+*These are spacing-based estimates (60 seconds ÷ gap), **not your plan's allowance or a guaranteed number of completed translations**. Only one request runs at a time per provider; slow responses and temporary pauses reduce throughput. Shorter gaps may increase usage and cost. Daily usage limits and limits based on text volume can still apply. A 1 s gap does not mean your translation will arrive in 1 s.
 
 After HTTP 429 or 456, that provider pauses according to Retry-After, capped at 24 hours, or for 30 seconds if no usable value is returned. Failed and queued work is not automatically replayed. Retry a comment after the indicated delay; captions resume with new recognition segments. Stop, input changes and key deletion cancel unneeded pending work.
 
