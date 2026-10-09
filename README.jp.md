@@ -48,6 +48,8 @@ Chromeのタブ音声取得には、そのタブで拡張を呼び出す操作�
 
 音声認識と翻訳は独立して選べます。たとえば **OpenAI STT → DeepL翻訳**、**Deepgram STT → DeepSeek翻訳** が可能です。コメントのMTLとre-MTLは同じ翻訳Providerを使います。
 
+**Deepgramの無料クレジット＋Geminiの無料利用枠で動作確認済みです。** [APIキーの取得・設定方法はこちら（初心者向け）](docs/API-KEYS.jp.md)。無料で使える範囲や条件も説明しています。
+
 | Provider | 音声認識（STT） | 翻訳・再翻訳 | 設定 |
 |---|---|---|---|
 | Deepgram | Nova-3 | — | Deepgram APIキー |

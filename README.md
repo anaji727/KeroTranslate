@@ -46,6 +46,8 @@ Saved language preferences are preserved. Old `demo` provider selections are nor
 
 Speech recognition and translation are independent. For example, you can combine OpenAI speech recognition with DeepL translation. Comment translation and back-translation use the same selected translation provider and model.
 
+**Tested using Deepgram free credits and the Gemini free tier.** [Get and set up your API keys: a beginner guide](docs/API-KEYS.md), including free-usage limits and conditions.
+
 | Provider | Speech recognition | Translation / back-translation | Configuration |
 |---|---|---|---|
 | Deepgram | Nova-3 | — | Deepgram API key |
