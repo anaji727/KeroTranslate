@@ -2,9 +2,11 @@
 
 [日本語の原文](ACCEPTANCE.jp.md) · [README](../README.md)
 
-Updated October 9, 2026 for Beta 0.1.17. Record actual streaming and API results here; do not invent performance figures. The Japanese counterpart preserves the previous testing record, with the beta changes noted at the top.
+Updated October 9, 2026 for Beta 0.2. Record actual streaming and API results here; do not invent performance figures. The Japanese counterpart preserves the previous testing record, with the beta changes noted at the top.
 
 ## Evidence and its limits
+
+Beta 0.2 is a version and packaging update of 0.1.17. Previous functional test results remain applicable; no new live API or browser validation is claimed. Version labels, syntax, documentation links and packaged-file parity are checked for this update.
 
 Beta 0.1.17 makes MTL progress delivery nonblocking. Regression checks cover an unresolved frame notification, a synchronous delivery failure and late progress after completion. Virtual-clock comparisons show savings only when notification delivery delays the next request; they do not measure real API or YouTube latency. Request spacing and API call counts are unchanged. See the [comment latency experiment](LATENCY-0.1.17.md).
 

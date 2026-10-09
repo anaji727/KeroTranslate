@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "KeroTranslate",
-  "version": "0.1.17",
+  "version": "0.2.0",
+  "version_name": "0.2",
   "minimum_chrome_version": "116",
   "description": "EN / JA captions and comment drafting. INSERT never sends.",
   "permissions": [

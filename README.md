@@ -8,7 +8,7 @@ Follow a stream with original and translated captions. Draft a comment, translat
 
 **INSERT only fills the chat input. It never sends a message. You review and post it yourself.**
 
-Current version: **Beta 0.1.17** (October 9, 2026).
+Current version: **Beta 0.2** (October 9, 2026).
 
 ## Install the beta
 
@@ -168,7 +168,7 @@ node tools/check.js
 ./tools/package.ps1
 ```
 
-`sync-version.js` reads the extension manifest and updates the beta labels. The package script runs it automatically before building the ZIP. Update `package.json` and `extension/manifest.json` together. Test doubles live in `tests/`; they are not shipped as providers. The old standalone Demo preview and its build/serve tools have been removed.
+`sync-version.js` reads the extension manifest and updates the beta labels, using `version_name` when present and `version` otherwise. The package script runs it automatically before building the ZIP. Update `package.json` and `extension/manifest.json` together. Test doubles live in `tests/`; they are not shipped as providers. The old standalone Demo preview and its build/serve tools have been removed.
 
 | Location | Contents |
 |---|---|
@@ -183,6 +183,8 @@ node tools/check.js
 English is the primary documentation language. Each document links to a corresponding `.jp.md` Japanese version. Historical notes describe their original releases; use this README for current installation instructions.
 
 ## Changelog
+
+- **Beta 0.2:** Promote the current beta to the 0.2 milestone (extension/package version `0.2.0`). Update release labels and the distribution ZIP; functionality and saved settings are unchanged from 0.1.17.
 
 - **Beta 0.1.17:** Start back-translation without waiting for the YouTube frame to acknowledge the MTL progress notification. Keep request spacing, provider cooldowns, two separate translation requests and the 650 ms typing debounce unchanged. See the [latency experiment](docs/LATENCY-0.1.17.md) for simulated results and limits.
 
