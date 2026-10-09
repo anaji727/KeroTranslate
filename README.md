@@ -8,7 +8,7 @@ Follow a stream with original and translated captions. Draft a comment, translat
 
 **INSERT only fills the chat input. It never sends a message. You review and post it yourself.**
 
-Current version: **Beta 0.1.15** (October 9, 2026).
+Current version: **Beta 0.1.16** (October 9, 2026).
 
 ## Install the beta
 
@@ -183,6 +183,8 @@ node tools/check.js
 English is the primary documentation language. Each document links to a corresponding `.jp.md` Japanese version. Historical notes describe their original releases; use this README for current installation instructions.
 
 ## Changelog
+
+- **Beta 0.1.16:** Address both 0.1.15 code-review findings: bind native fetch to the browser global in OpenAI/DeepL speech recognition, and update the queue immediately when request spacing is saved from Settings. Both longer and shorter intervals apply to the next request while provider cooldowns remain in force.
 
 - **Beta 0.1.15:** Explicitly bind native queue timers to the browser global, including supplied timer functions. Catch failures inside back-translation wait callbacks and queued dispatch so promises settle and later work can recover. Add stage-specific Illegal invocation diagnostics. Stop stale content scripts after extension-context invalidation, preserving the visible draft and showing a reload instruction.
 

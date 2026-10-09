@@ -141,6 +141,7 @@ async function handle(m,sender){
     const config=sanitizeSettings(m.settings);await stop();
     for(const c of pending.values())c.abort();pending.clear();
     await chrome.storage.local.set({settings:config});
+    translations.updateInterval(config.translationInterval);
     if(m.keys)await chrome.storage.local.set({keys:Object.fromEntries(['gemini','deepgram','openai','deepl','deepseek'].map(name=>[name,String(m.keys[name]||'').trim().slice(0,500)]))});
     for(const tab of await chrome.tabs.query({url:'https://www.youtube.com/*'}))await broadcast(tab.id,{type:'CONFIG_CHANGED',settings:config});return {};
   });

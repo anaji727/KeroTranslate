@@ -2,11 +2,11 @@
 
 [日本語の原文](ACCEPTANCE.jp.md) · [README](../README.md)
 
-Updated October 9, 2026 for Beta 0.1.13. Record actual streaming and API results here; do not invent performance figures. The Japanese counterpart preserves the previous testing record, with the beta changes noted at the top.
+Updated October 9, 2026 for Beta 0.1.16. Record actual streaming and API results here; do not invent performance figures. The Japanese counterpart preserves the previous testing record, with the beta changes noted at the top.
 
 ## Evidence and its limits
 
-Offline Node tests cover stale responses, slow back-translation, IME input, direction changes, manual MTL edits, full comment retries, empty input and disposal; HTTP error classification and missing keys; draft/emote preservation and ambiguous inputs; socket stop/races/backpressure; secret/configuration boundaries; late audio events after Stop; and the shared translation queue. Beta 0.1.10 adds checks for retiring Demo adapters, migration of old provider settings and missing-key rejection before capture. Beta 0.1.11 adds simulated browser/worker restart, persistent-key deletion, legacy migration, local-key precedence and storage-failure checks. All 119 offline tests pass. Syntax and manifest entry files are checked separately.
+Offline Node tests cover stale responses, slow back-translation, IME input, direction changes, manual MTL edits, full comment retries, empty input and disposal; HTTP error classification and missing keys; draft/emote preservation and ambiguous inputs; socket stop/races/backpressure; secret/configuration boundaries; late audio events after Stop; and the shared translation queue. Beta 0.1.10 adds checks for retiring Demo adapters, migration of old provider settings and missing-key rejection before capture. Beta 0.1.11 adds simulated browser/worker restart, persistent-key deletion, legacy migration, local-key precedence and storage-failure checks. All 131 offline tests pass. Syntax and manifest entry files are checked separately.
 
 Before the Demo preview was retired, its bundled JavaScript was syntax-checked. Its local HTTP server was also checked for successful HTML/CSS/JS delivery and MIME types, 404 responses, and rejection of paths outside the public root. A Windows trailing-separator bug was fixed. These were HTTP checks, not evidence of rendered UI or browser interaction.
 
@@ -107,3 +107,12 @@ The user supplied a stack at `TranslationQueue.nextRequest` line 37: native time
 All 124 offline tests pass, including timer exceptions on a repeated back-translation wait and queued dispatch, recovery of subsequent work, synchronous CANCEL failure, and extension-context invalidation. A local actual-composer/background-worker harness completed translation, back-translation and manual-MTL back-translation with mocked provider responses. No real provider requests were made. End-to-end confirmation in the user's installed extension remains pending.
 
 Stage diagnostics contain only the operation name and local extension stack locations, never comment text or API keys. The separately reported Extension context invalidated error now stops stale observation and communication, leaves the draft visible and makes the old panel read-only until reload.
+
+
+## Code-review follow-up (0.1.16)
+
+Both findings in the October 9 review of 0.1.15 are addressed. The OpenAI/DeepL STT base adapter now invokes default and supplied fetch functions with the browser global receiver. Settings saves now update existing translation lanes as well as persisted settings.
+
+All 131 offline tests pass. Added checks cover both STT adapters with receiver-sensitive default/supplied fetch, Settings changes from 500 to 12000 ms and back, and preserving a 30-second provider cooldown across a save. The interval tests exercise the production background handler and scheduler using a virtual clock and mock provider transport.
+
+A local Chromium check reproduced Illegal invocation with the old instance-style native fetch call. The updated OpenaiStt and DeeplStt fetch wrappers both read a data URL successfully. This verifies native calling conventions, not live STT connections: no external API, audio capture or chat posting was used. Real provider-account validation remains pending.

@@ -70,3 +70,22 @@ test('DeepL backpressure stops capture and pending encodes cannot send after Sto
   await p.start({});await p.socket.onopen();p.socket.bufferedAmount=2_000_001;p.audio(new Blob(['x']));assert.equal(p.stopped,true);assert.equal(errors.length,1);assert.equal(p.recorder.state,'inactive');
   const q=new DeeplStt({...options(),fetchImpl:async()=>response(session)});await q.start({});await q.socket.onopen();q.audio(new Blob(['late']));q.stop();await q.sending;assert.equal(q.socket.sent.filter(e=>e.source_media_chunk).length,0);
 });
+
+
+for(const [name,Adapter] of [['OpenAI',OpenaiStt],['DeepL',DeeplStt]])for(const supplied of [false,true]){
+  test(`${name} STT uses the global fetch receiver (${supplied?'supplied':'default'} transport)`,async t=>{
+    const calls=[],errors=[];
+    function fetchWithBrowserBrandCheck(url,request){
+      if(this!==globalThis)throw new TypeError('Illegal invocation');
+      calls.push({url,request});return Promise.resolve(name==='OpenAI'?{ok:true,text:async()=>'answer'}:response(session));
+    }
+    if(!supplied)t.mock.method(globalThis,'fetch',fetchWithBrowserBrandCheck);
+    const adapter=new Adapter({...options(),onError:error=>errors.push(error),...(supplied?{fetchImpl:fetchWithBrowserBrandCheck}:{})});
+    try{
+      await adapter.start({getAudioTracks:()=>[{}]});assert.deepEqual(errors,[]);assert.equal(calls.length,1);
+      assert.equal(calls[0].request.signal,adapter.controller.signal);
+      if(name==='OpenAI')assert.equal(adapter.peer.remote.sdp,'answer');else assert.ok(adapter.socket.url.startsWith('wss://api.deepl.com/'));
+    }finally{adapter.stop();}
+    assert.equal(calls[0]?.request.signal.aborted,true);
+  });
+}

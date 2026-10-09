@@ -16,7 +16,12 @@ export class AudioTurnDetector {
 }
 
 class LiveStt {
-  constructor(options){Object.assign(this,{fetchImpl:fetch,onBytes:()=>{},stopped:false,...options});this.controller=new AbortController();}
+  constructor({fetchImpl=globalThis.fetch,...options}){
+    // Browser-native fetch must receive the Window/Worker global, not this adapter.
+    Object.assign(this,{onBytes:()=>{},stopped:false,...options});
+    this.fetchImpl=(...args)=>Reflect.apply(fetchImpl,globalThis,args);
+    this.controller=new AbortController();
+  }
   fail(message){if(this.stopped)return;this.stop();this.onError(message);}
   timeoutStart(label){this.timeout=setTimeout(()=>this.fail(`${label} connection timed out. Check API access and network.`),20000);}
   stop(){
