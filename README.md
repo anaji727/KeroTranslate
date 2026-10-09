@@ -8,7 +8,7 @@ Follow a stream with original and translated captions. Draft a comment, translat
 
 **INSERT only fills the chat input. It never sends a message. You review and post it yourself.**
 
-Current version: **Beta 0.1.16** (October 9, 2026).
+Current version: **Beta 0.1.17** (October 9, 2026).
 
 ## Install the beta
 
@@ -183,6 +183,8 @@ node tools/check.js
 English is the primary documentation language. Each document links to a corresponding `.jp.md` Japanese version. Historical notes describe their original releases; use this README for current installation instructions.
 
 ## Changelog
+
+- **Beta 0.1.17:** Start back-translation without waiting for the YouTube frame to acknowledge the MTL progress notification. Keep request spacing, provider cooldowns, two separate translation requests and the 650 ms typing debounce unchanged. See the [latency experiment](docs/LATENCY-0.1.17.md) for simulated results and limits.
 
 - **Beta 0.1.16:** Address both 0.1.15 code-review findings: bind native fetch to the browser global in OpenAI/DeepL speech recognition, and update the queue immediately when request spacing is saved from Settings. Both longer and shorter intervals apply to the next request while provider cooldowns remain in force.
 

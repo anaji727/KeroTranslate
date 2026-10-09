@@ -97,7 +97,8 @@ async function handle(m,sender){
           stage=request.backOnly?'edited translation':'translation';
           const mtl=request.backOnly?request.mtl:await translate({text:request.text,source,target,signal:controller.signal},config,keys);
           if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
-          await chrome.tabs.sendMessage(sender.tab.id,{type:'COMPOSER_PROGRESS',id:m.id,mtl},{frameId:sender.frameId}).catch(()=>{});
+          // UI progress is best-effort: a busy YouTube frame must not delay re-MTL.
+          try{void chrome.tabs.sendMessage(sender.tab.id,{type:'COMPOSER_PROGRESS',id:m.id,mtl},{frameId:sender.frameId}).catch(()=>{});}catch{}
           if(!request.backOnly){stage='back-translation wait';await nextRequest();}
           stage='back-translation';
           const back=await translate({text:mtl,source:target,target:source,signal:controller.signal},config,keys);

@@ -55,7 +55,7 @@ test('content routes matching batch progress and drops cancelled/finished progre
   controller.abort();await assert.rejects(first,{name:'AbortError'});assert.ok(h.sent.some(m=>m.type==='CANCEL'&&m.id==='1'));assert.equal(h.timers.size,0);
   h.notify({type:'COMPOSER_PROGRESS',id:'1',mtl:'late'});assert.equal(updates.length,1);
   const second=h.options.translateBatch({text:'second',source:'en',target:'ja',backOnly:false,signal:new AbortController().signal,onProgress:v=>updates.push(v.mtl)});
-  h.replies.get('2')({ok:true,mtl:'current',back:'checked'});const result=await second;assert.equal(result.back,'checked');assert.equal(h.timers.size,0);
+  h.replies.get('2')({ok:true,mtl:'current',back:'checked'});const result=await second;assert.equal(result.back,'checked');assert.equal(h.timers.size,0);h.notify({type:'COMPOSER_PROGRESS',id:'2',mtl:'late completed progress'});assert.deepEqual(updates,['partial result']);
 });
 test('content times out an unresponsive comment batch and permits a fresh request',async()=>{
   const h=await composerHarness(),args={text:'first',source:'en',target:'ja',backOnly:false,signal:new AbortController().signal,onProgress(){}};

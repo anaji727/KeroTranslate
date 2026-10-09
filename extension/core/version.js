@@ -1,2 +1,2 @@
 // Generated from manifest.json by tools/sync-version.js.
-export const RELEASE_LABEL="Beta 0.1.16";
+export const RELEASE_LABEL="Beta 0.1.17";

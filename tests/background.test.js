@@ -166,3 +166,19 @@ test('cancelling between comment stages releases the lane for a complete retry',
     for(const sender of [options,audio,{...content,url:'https://example.com/'}])assert.equal((await message({type:'TRANSLATE_COMMENT',id:'bad',request},sender)).ok,false);
   }finally{globalThis.fetch=oldFetch;chrome.tabs.sendMessage=send;data.local.settings={};}
 });
+
+
+test('delayed or failed progress delivery never blocks paced back-translation', {timeout:5000}, async()=>{
+  data.local.settings={translationProvider:'gemini',translationInterval:500};data.local.keys={gemini:'fake'};
+  const oldFetch=globalThis.fetch,send=chrome.tabs.sendMessage,starts=[];let failProgress=false;
+  globalThis.fetch=async()=>{starts.push(Date.now());return {ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:'translated'}]}}]})};};
+  chrome.tabs.sendMessage=()=>{if(failProgress)throw new Error('Frame unavailable');return new Promise(()=>{});};
+  try{
+    const request={text:'example',source:'en',target:'ja',backOnly:false};
+    const result=await message({type:'TRANSLATE_COMMENT',id:'slow-frame',request});
+    assert.equal(result.ok,true);assert.equal(result.back,'translated');assert.equal(starts.length,2);assert.ok(starts[1]-starts[0]>=480);
+    failProgress=true;
+    const edited=await message({type:'TRANSLATE_COMMENT',id:'missing-frame',request:{...request,backOnly:true,mtl:'edited'}});
+    assert.equal(edited.ok,true);assert.equal(starts.length,3);
+  }finally{globalThis.fetch=oldFetch;chrome.tabs.sendMessage=send;data.local.settings={};}
+});
