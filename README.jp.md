@@ -1,3 +1,5 @@
+![KeroTranslate Beta — Chrome向けのライブ字幕・コメント翻訳・意味確認](docs/assets/kerotranslate-banner.png)
+
 # 🐸 KeroTranslate
 
 [English](README.md)
