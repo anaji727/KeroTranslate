@@ -4,6 +4,8 @@
 
 [日本語](README.jp.md)
 
+[Website](https://kurayan.github.io/KeroTranslate/) · [Privacy policy](https://kurayan.github.io/KeroTranslate/privacy.html)
+
 Live captions and comment translation for YouTube Live, built as a Chrome extension for English and Japanese viewers.
 
 Follow a stream with original and translated captions. Draft a comment, translate it, and use back-translation to check its meaning before inserting it into YouTube's chat input.

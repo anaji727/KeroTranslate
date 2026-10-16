@@ -4,6 +4,8 @@
 
 [English](README.md)
 
+[公式サイト](https://kurayan.github.io/KeroTranslate/) · [プライバシーポリシー](https://kurayan.github.io/KeroTranslate/privacy.jp.html)
+
 YouTube Liveの音声字幕と、自分のコメント翻訳を支援するChrome拡張です。
 配信を見ながら原文・翻訳を読み、自分のコメントは **Original → MTL → re-MTL** で意味を確認できます。
 
